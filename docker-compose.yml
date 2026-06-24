@@ -1,0 +1,95 @@
+version: '3.8'
+
+name: polisur-sitop
+
+services:
+  polisur-db:
+    image: postgres:16-alpine
+    container_name: polisur-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-polisur}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-polisur_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-polisur}
+    volumes:
+      - polisur_pgdata:/var/lib/postgresql/data
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    networks:
+      - polisur-net
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-polisur} -d ${POSTGRES_DB:-polisur}',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  polisur-api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: polisur-api
+    restart: always
+    mem_limit: 768m
+    depends_on:
+      polisur-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://polisur:polisur_secret@polisur-db:5432/polisur?schema=public}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET es obligatorio en producción}
+      PORT: ${PORT:-3001}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      NODE_OPTIONS: --max-old-space-size=512
+      SHARP_CONCURRENCY: ${SHARP_CONCURRENCY:-3}
+    ports:
+      - '${API_PORT:-3001}:3001'
+    volumes:
+      - polisur_evidence:/app/uploads/evidence
+    networks:
+      - polisur-net
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  polisur-frontend:
+    build:
+      context: .
+      dockerfile: apps/admin-web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api}
+    container_name: polisur-frontend
+    restart: always
+    depends_on:
+      polisur-api:
+        condition: service_healthy
+    environment:
+      PORT: ${FRONTEND_PORT:-3000}
+      HOSTNAME: 0.0.0.0
+    ports:
+      - '${FRONTEND_PORT:-3000}:3000'
+    networks:
+      - polisur-net
+
+networks:
+  polisur-net:
+    driver: bridge
+    name: polisur-net
+
+volumes:
+  polisur_pgdata:
+    name: polisur_pgdata
+  polisur_evidence:
+    name: polisur_evidence

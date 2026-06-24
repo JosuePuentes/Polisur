@@ -1,0 +1,258 @@
+// Polisur — Esquema relacional definitivo (PostgreSQL + Prisma)
+// Organigrama descentralizado · Evidencias tácticas · RBAC · Patrullaje
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum RangeRole {
+  SUPER_ADMIN
+  JEFE_DEPARTAMENTO
+  OFICIAL_ACTIVO
+  DISCENTE
+}
+
+enum IncidentStatus {
+  PENDIENTE
+  DESPACHADO
+  EN_TRANSITO
+  PENDIENTE_RESEÑA
+  PROCESADO
+  CERRADO
+}
+
+enum EvidenceStage {
+  RETORNO_CALLE
+  RESEÑA_COMANDO
+}
+
+enum IncidentOrigin {
+  INTERNO
+  PUBLICO_ANONIMO
+  PUBLICO_PANICO
+}
+
+enum AuditActionKind {
+  HTTP_REQUEST
+  CRITICAL_ACTION
+}
+
+enum AuditSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ORGANIGRAMA
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Direcciones o comandos locales administrables (Antidrogas, Violencia de Género, etc.)
+model Department {
+  id          String   @id @default(cuid())
+  code        String   @unique @db.VarChar(32)
+  name        String   @db.VarChar(120)
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  squads    Squad[]
+  officers  Officer[]
+  incidents Incident[]
+
+  @@index([isActive], map: "idx_department_active_btree")
+  @@index([name], map: "idx_department_name_btree")
+  @@map("departments")
+}
+
+/// Escuadra táctica creada por el jefe del comando local
+model Squad {
+  id           String   @id @default(cuid())
+  name         String   @db.VarChar(80)
+  callsign     String?  @db.VarChar(24)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  /// Jefe de escuadra (relación 1:1 opcional)
+  leaderId String?  @unique
+  leader   Officer? @relation("SquadLeader", fields: [leaderId], references: [id], onDelete: SetNull)
+
+  members   Officer[]  @relation("SquadMembers")
+  incidents Incident[]
+
+  @@index([departmentId], map: "idx_squad_department_btree")
+  @@index([isActive], map: "idx_squad_active_btree")
+  @@index([name], map: "idx_squad_name_btree")
+  @@map("squads")
+}
+
+/// Funcionario: RRHH, control táctico y credencial QR en calle
+model Officer {
+  id               String    @id @default(cuid())
+  cedula           String    @unique @db.VarChar(20)
+  nombres          String    @db.VarChar(80)
+  apellidos        String    @db.VarChar(80)
+  rangeRole        RangeRole @default(OFICIAL_ACTIVO)
+  passwordHash     String    @db.VarChar(255)
+  credentialNumber String    @unique @db.VarChar(32)
+  qrToken          String    @unique @default(cuid()) @db.VarChar(64)
+  isSuspended      Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  /// Asignación macro por RRHH
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  /// Asignación táctica local por jefe de comando (miembro de escuadra)
+  squadId String?
+  squad   Squad?  @relation("SquadMembers", fields: [squadId], references: [id], onDelete: SetNull)
+
+  /// Escuadra que lidera (máximo una)
+  ledSquad Squad? @relation("SquadLeader")
+
+  /// Cohorte académica (solo aplica cuando rangeRole = DISCENTE)
+  promocionId String?
+  promocion   Promocion? @relation(fields: [promocionId], references: [id], onDelete: SetNull)
+
+  @@index([cedula], map: "idx_officer_cedula_btree")
+  @@index([rangeRole], map: "idx_officer_range_role_btree")
+  @@index([departmentId], map: "idx_officer_department_btree")
+  @@index([squadId], map: "idx_officer_squad_btree")
+  @@index([promocionId], map: "idx_officer_promocion_btree")
+  @@index([isSuspended], map: "idx_officer_suspended_btree")
+  @@index([apellidos, nombres], map: "idx_officer_name_btree")
+
+  auditLogs AuditLog[]
+
+  @@map("officers")
+}
+
+/// Cohorte de la academia policial vinculada a discentes
+model Promocion {
+  id               String   @id @default(cuid())
+  nombreCurso      String   @db.VarChar(120)
+  fechaInicio      DateTime @db.Date
+  fechaFinEstimada DateTime @db.Date
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  discentes Officer[]
+
+  @@index([fechaInicio], map: "idx_promocion_inicio_btree")
+  @@index([fechaFinEstimada], map: "idx_promocion_fin_btree")
+  @@index([nombreCurso], map: "idx_promocion_nombre_btree")
+  @@map("promociones")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPERACIONES TÁCTICAS Y PATRULLAJE
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Caso, denuncia pública o minuta de patrullaje
+model Incident {
+  id          String         @id @default(cuid())
+  code        String         @unique @db.VarChar(24)
+  tipoDelito  String         @db.VarChar(120)
+  status      IncidentStatus @default(PENDIENTE)
+  parroquia   String         @db.VarChar(80)
+  cuadrante   String         @db.VarChar(40)
+  descripcion String         @db.Text
+  latitude    Float?
+  longitude   Float?
+  origen      IncidentOrigin @default(INTERNO)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  closedAt    DateTime?
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  /// Comisión actuante exclusiva (responsabilidad legal en calle)
+  squadId String
+  squad   Squad  @relation(fields: [squadId], references: [id], onDelete: Restrict)
+
+  evidence IncidentEvidence[]
+
+  @@index([code], map: "idx_incident_code_btree")
+  @@index([status], map: "idx_incident_status_btree")
+  @@index([cuadrante], map: "idx_incident_cuadrante_btree")
+  @@index([parroquia], map: "idx_incident_parroquia_btree")
+  @@index([departmentId], map: "idx_incident_department_btree")
+  @@index([squadId], map: "idx_incident_squad_btree")
+  @@index([tipoDelito], map: "idx_incident_tipo_delito_btree")
+  @@index([status, cuadrante], map: "idx_incident_status_cuadrante_btree")
+  @@index([departmentId, status], map: "idx_incident_dept_status_btree")
+  @@index([createdAt], map: "idx_incident_created_btree")
+  @@index([origen], map: "idx_incident_origen_btree")
+  @@map("incidents")
+}
+
+/// Registro inmutable de evidencia fotográfica en la nube
+model IncidentEvidence {
+  id          String        @id @default(cuid())
+  imageUrl    String        @db.VarChar(2048)
+  stage       EvidenceStage
+  descripcion String?       @db.VarChar(500)
+  capturedAt  DateTime      @default(now())
+
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Restrict)
+
+  @@index([incidentId], map: "idx_evidence_incident_btree")
+  @@index([stage], map: "idx_evidence_stage_btree")
+  @@index([incidentId, stage], map: "idx_evidence_incident_stage_btree")
+  @@index([capturedAt], map: "idx_evidence_captured_btree")
+  @@map("incident_evidence")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDITORÍA FORENSE INMUTABLE (NO-REPUDIO)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Traza forense append-only: cada registro es inmutable tras la inserción
+model AuditLog {
+  id           String          @id @default(cuid())
+  traceId      String          @db.VarChar(36)
+  actionKind   AuditActionKind @default(HTTP_REQUEST)
+  severity     AuditSeverity   @default(INFO)
+  actionLabel  String?         @db.VarChar(120)
+  officerId    String?
+  rangeRole    RangeRole?
+  clientIp     String          @db.VarChar(45)
+  httpMethod   String          @db.VarChar(10)
+  endpointUrl  String          @db.VarChar(512)
+  routeParams  Json?
+  queryParams  Json?
+  requestBody  Json?
+  statusCode   Int
+  success      Boolean
+  durationMs   Int?
+  metadata     Json?
+  errorMessage String?         @db.VarChar(500)
+  createdAt    DateTime        @default(now())
+
+  officer Officer? @relation(fields: [officerId], references: [id], onDelete: SetNull)
+
+  @@index([officerId], map: "idx_audit_officer_btree")
+  @@index([createdAt], map: "idx_audit_created_btree")
+  @@index([endpointUrl], map: "idx_audit_endpoint_btree")
+  @@index([actionKind], map: "idx_audit_action_kind_btree")
+  @@index([severity], map: "idx_audit_severity_btree")
+  @@index([success], map: "idx_audit_success_btree")
+  @@map("audit_logs")
+}

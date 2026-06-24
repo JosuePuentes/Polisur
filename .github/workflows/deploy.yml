@@ -1,0 +1,125 @@
+name: Deploy Polisur SITOP
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  NODE_VERSION: '20'
+
+jobs:
+  ci:
+    name: CI — Lint & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            packages/database/package-lock.json
+            apps/api/package-lock.json
+            apps/admin-web/package-lock.json
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/database/node_modules
+            apps/api/node_modules
+            apps/admin-web/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('packages/database/package-lock.json', 'apps/api/package-lock.json', 'apps/admin-web/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm run ci:install
+
+      - name: Build monorepo
+        env:
+          JWT_SECRET: ci-build-secret-minimum-32-characters-long
+          NEXT_PUBLIC_API_URL: http://localhost:3001/api
+        run: npm run build
+
+      - name: Run API unit tests
+        working-directory: apps/api
+        run: npm run test
+
+  cd:
+    name: CD — Docker Build & Push
+    runs-on: ubuntu-latest
+    needs: [ci]
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          echo "short_sha=$(echo "${GITHUB_SHA}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+          OWNER="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          echo "owner=${OWNER}" >> "$GITHUB_OUTPUT"
+          echo "api_image=${{ env.REGISTRY }}/${OWNER}/polisur-api" >> "$GITHUB_OUTPUT"
+          echo "frontend_image=${{ env.REGISTRY }}/${OWNER}/polisur-frontend" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build & push polisur-api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.api_image }}:latest
+            ${{ steps.meta.outputs.api_image }}:sha-${{ steps.meta.outputs.short_sha }}
+            ${{ startsWith(github.ref, 'refs/tags/v') && format('{0}:{1}', steps.meta.outputs.api_image, github.ref_name) || '' }}
+          cache-from: type=gha,scope=polisur-api
+          cache-to: type=gha,mode=max,scope=polisur-api
+
+      - name: Build & push polisur-frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/admin-web/Dockerfile
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api' }}
+          tags: |
+            ${{ steps.meta.outputs.frontend_image }}:latest
+            ${{ steps.meta.outputs.frontend_image }}:sha-${{ steps.meta.outputs.short_sha }}
+            ${{ startsWith(github.ref, 'refs/tags/v') && format('{0}:{1}', steps.meta.outputs.frontend_image, github.ref_name) || '' }}
+          cache-from: type=gha,scope=polisur-frontend
+          cache-to: type=gha,mode=max,scope=polisur-frontend
+
+# ── Secretos requeridos en GitHub (Settings → Secrets → Actions) ─────────────
+# REGISTRY_USERNAME  → Usuario GHCR / Docker Hub
+# REGISTRY_PASSWORD  → PAT (write:packages) o Docker Hub token
+# NEXT_PUBLIC_API_URL → URL pública del API para el build del frontend en CD

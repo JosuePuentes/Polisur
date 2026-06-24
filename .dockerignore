@@ -1,0 +1,14 @@
+**/node_modules
+**/.next
+**/dist
+**/.git
+**/.env
+**/.env.local
+**/*.md
+**/coverage
+**/.cursor
+**/terminals
+**/agent-transcripts
+**/mcps
+**/*.log
+**/npm-debug.log*

@@ -1,0 +1,14 @@
+{
+  "name": "polisur-sitop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monorepo SITOP / DAET — Polisur",
+  "scripts": {
+    "build": "npm run build --prefix packages/database && npm run build --prefix apps/api && npm run build --prefix apps/admin-web",
+    "build:database": "npm run build --prefix packages/database",
+    "build:api": "npm run build --prefix apps/api",
+    "build:web": "npm run build --prefix apps/admin-web",
+    "ci:install": "npm ci --prefix packages/database && npm ci --prefix apps/api && npm ci --prefix apps/admin-web",
+    "test:api": "npm run test --prefix apps/api"
+  }
+}
