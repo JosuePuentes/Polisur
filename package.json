@@ -9,6 +9,7 @@
     "build:api": "npm run build --prefix apps/api",
     "build:web": "npm run build --prefix apps/admin-web",
     "ci:install": "npm ci --prefix packages/database && npm ci --prefix apps/api && npm ci --prefix apps/admin-web",
+    "build:render": "npm ci --prefix packages/database --include=dev && npm ci --prefix apps/api --include=dev && npm run build --prefix packages/database && npm run db:push --prefix packages/database && npm run build --prefix apps/api",
     "test:api": "npm run test --prefix apps/api"
   }
 }
