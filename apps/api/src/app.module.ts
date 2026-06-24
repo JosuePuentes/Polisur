@@ -4,6 +4,7 @@ import { DatabaseModule } from '@polisur/database';
 import { AcademyModule } from './academy/academy.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { BootstrapModule } from './bootstrap/bootstrap.module';
 import { HealthModule } from './health/health.module';
 import { IncidentsModule } from './incidents/incidents.module';
 import { PublicIncidentsModule } from './public-incidents/public-incidents.module';
@@ -20,6 +21,7 @@ import { TacticalModule } from './realtime/tactical.module';
       },
     ]),
     AuditModule,
+    BootstrapModule,
     HealthModule,
     TacticalModule,
     AuthModule,
