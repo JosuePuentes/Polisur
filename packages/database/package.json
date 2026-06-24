@@ -32,6 +32,7 @@
     "db:migrate:deploy": "prisma migrate deploy --schema=./prisma/schema.prisma",
     "db:push": "prisma db push --schema=./prisma/schema.prisma",
     "db:seed": "prisma db seed",
+    "db:bootstrap": "ts-node --transpile-only prisma/bootstrap-admin.ts",
     "db:studio": "prisma studio --schema=./prisma/schema.prisma"
   },
   "prisma": {
