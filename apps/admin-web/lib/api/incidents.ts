@@ -19,6 +19,24 @@ function authHeadersMultipart(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+export interface IncidentCatalogs {
+  departments: Array<{
+    id: string;
+    code: string;
+    name: string;
+    squads: Array<{ id: string; name: string; callsign: string | null }>;
+  }>;
+}
+
+export async function fetchIncidentCatalogs(): Promise<IncidentCatalogs> {
+  const response = await fetch(`${API_BASE_URL}/incidents/catalogs`, {
+    headers: authHeadersJson(),
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(await parseIncidentError(response));
+  return response.json() as Promise<IncidentCatalogs>;
+}
+
 export async function fetchIncidents(): Promise<Incident[]> {
   const response = await fetch(`${API_BASE_URL}/incidents`, {
     headers: authHeadersJson(),
@@ -59,4 +77,54 @@ export async function uploadEvidence(
   }
 
   return response.json() as Promise<IncidentEvidence>;
+}
+
+export interface CreateIncidentPayload {
+  tipoDelito: string;
+  parroquia: string;
+  cuadrante: string;
+  descripcion: string;
+  departmentId: string;
+  squadId: string;
+}
+
+export async function createIncident(
+  payload: CreateIncidentPayload,
+): Promise<Incident> {
+  const response = await fetch(`${API_BASE_URL}/incidents`, {
+    method: 'POST',
+    headers: authHeadersJson(),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseIncidentError(response));
+  }
+
+  return response.json() as Promise<Incident>;
+}
+
+export async function updateIncidentStatus(
+  incidentId: string,
+  status: string,
+): Promise<Incident> {
+  const response = await fetch(`${API_BASE_URL}/incidents/${incidentId}/status`, {
+    method: 'PATCH',
+    headers: authHeadersJson(),
+    body: JSON.stringify({ status }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseIncidentError(response));
+  }
+
+  return response.json() as Promise<Incident>;
+}
+
+async function parseIncidentError(response: Response): Promise<string> {
+  const body = await response.json().catch(() => ({}));
+  const message = body.message;
+  if (Array.isArray(message)) return message.join('. ');
+  if (typeof message === 'string') return message;
+  return 'Operación rechazada';
 }

@@ -3,9 +3,11 @@
 import dynamic from 'next/dynamic';
 import { useCallback, useState } from 'react';
 import { getSession } from '@/lib/auth';
+import { hasPermission, SITOP_PERMISSIONS } from '@/lib/permissions';
 import type { TacticalSocketIncident } from '@/lib/constants/tactical-socket';
 import { useTacticalSocket } from '@/lib/hooks/use-tactical-socket';
 import type { Incident } from '@/lib/types/incident.types';
+import { CreateIncidentPanel } from '@/components/dashboard/create-incident-panel';
 import { ExecutiveSummary } from '@/components/dashboard/executive-summary';
 import { IncidentList } from '@/components/dashboard/incident-list';
 import { IncidentModal } from '@/components/dashboard/incident-modal';
@@ -34,6 +36,7 @@ export default function DashboardPage() {
     null,
   );
   const [refreshKey, setRefreshKey] = useState(0);
+  const [originFilter, setOriginFilter] = useState('ALL');
   const [liveAlert, setLiveAlert] = useState<TacticalSocketIncident | null>(
     null,
   );
@@ -70,6 +73,9 @@ export default function DashboardPage() {
     return null;
   }
 
+  const canViewIncidents = hasPermission(session.permissions, SITOP_PERMISSIONS.INCIDENTS_VIEW);
+  const canCreateIncidents = hasPermission(session.permissions, SITOP_PERMISSIONS.INCIDENTS_CREATE);
+
   return (
     <div className="space-y-6">
       <TacticalAlertBanner
@@ -77,6 +83,12 @@ export default function DashboardPage() {
         onDismiss={() => setLiveAlert(null)}
       />
 
+      {canCreateIncidents && (
+        <CreateIncidentPanel onCreated={() => setRefreshKey((k) => k + 1)} />
+      )}
+
+      {canViewIncidents && (
+        <>
       <ExecutiveSummary
         incidents={incidents}
         session={session}
@@ -89,9 +101,23 @@ export default function DashboardPage() {
         onViewExpediente={handleViewExpediente}
       />
 
+      <div className="flex flex-wrap gap-2">
+        {['ALL', 'INTERNO', 'PUBLICO_ANONIMO', 'PUBLICO_PANICO'].map((filter) => (
+          <button
+            key={filter}
+            type="button"
+            onClick={() => setOriginFilter(filter)}
+            className={`rounded-lg px-3 py-1.5 text-xs ${originFilter === filter ? 'bg-cyan-900/40 text-cyan-300' : 'bg-slate-800 text-slate-400'}`}
+          >
+            {filter === 'ALL' ? 'Todos' : filter.replace(/_/g, ' ')}
+          </button>
+        ))}
+      </div>
+
       <IncidentList
         key={refreshKey}
         refreshKey={refreshKey}
+        originFilter={originFilter}
         onSelect={setSelectedIncident}
         onIncidentsChange={handleIncidentsChange}
       />
@@ -101,6 +127,8 @@ export default function DashboardPage() {
         onClose={() => setSelectedIncident(null)}
         onEvidenceUploaded={handleEvidenceUploaded}
       />
+        </>
+      )}
     </div>
   );
 }

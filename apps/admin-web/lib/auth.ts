@@ -35,6 +35,7 @@ export function mapPayloadToSession(payload: JwtPayload): OfficerSession {
     rangeRole: payload.rangeRole,
     departmentId: payload.departmentId,
     squadId: payload.squadId ?? null,
+    permissions: (payload.permissions ?? []) as OfficerSession['permissions'],
   };
 }
 

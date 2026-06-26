@@ -90,3 +90,25 @@ export async function graduatePromocion(
 
   return response.json() as Promise<GraduatePromocionResult>;
 }
+
+export interface CreatePromocionPayload {
+  nombreCurso: string;
+  fechaInicio: string;
+  fechaFinEstimada: string;
+}
+
+export async function createPromocion(
+  payload: CreatePromocionPayload,
+): Promise<Promocion> {
+  const response = await fetch(`${API_BASE_URL}/academy/promociones`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseApiError(response));
+  }
+
+  return response.json() as Promise<Promocion>;
+}

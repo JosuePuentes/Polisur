@@ -3,6 +3,7 @@ export { PrismaService } from './prisma.service';
 
 export * from './dto';
 export * from './validation';
+export * from './permissions/sitop-permissions';
 
 export {
   AuditActionKind,

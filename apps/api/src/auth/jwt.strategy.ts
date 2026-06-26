@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { PrismaService } from '@polisur/database';
+import { PrismaService, resolveOfficerPermissions } from '@polisur/database';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { AuthenticatedOfficer } from '../common/interfaces/authenticated-officer.interface';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
@@ -36,6 +36,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         departmentId: true,
         squadId: true,
         isSuspended: true,
+        permissions: true,
       },
     });
 
@@ -58,6 +59,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       rangeRole: officer.rangeRole,
       departmentId: officer.departmentId,
       squadId: officer.squadId,
+      permissions: resolveOfficerPermissions({
+        rangeRole: officer.rangeRole,
+        permissions: officer.permissions,
+      }),
     };
   }
 }

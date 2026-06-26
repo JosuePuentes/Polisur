@@ -1,0 +1,122 @@
+import { getAccessToken } from '@/lib/auth';
+import { API_BASE_URL } from '@/lib/constants';
+import type { SitopPermission } from '@/lib/permissions';
+import type {
+  CreateOfficerPayload,
+  OfficerRecord,
+  RrhhCatalogs,
+} from '@/lib/types/rrhh.types';
+
+function authHeaders(): HeadersInit {
+  const token = getAccessToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function parseError(response: Response): Promise<string> {
+  const body = await response.json().catch(() => ({}));
+  const message = body.message;
+  if (Array.isArray(message)) return message.join('. ');
+  if (typeof message === 'string') return message;
+  return 'Operación rechazada';
+}
+
+export async function createDepartment(payload: {
+  code: string;
+  name: string;
+  description?: string;
+}): Promise<{ id: string; code: string; name: string }> {
+  const response = await fetch(`${API_BASE_URL}/rrhh/departments`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json();
+}
+
+export async function createSquad(payload: {
+  departmentId: string;
+  name: string;
+  callsign?: string;
+}): Promise<{ id: string; name: string; callsign: string | null }> {
+  const response = await fetch(`${API_BASE_URL}/rrhh/squads`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json();
+}
+
+export async function fetchRrhhCatalogs(): Promise<RrhhCatalogs> {
+  const response = await fetch(`${API_BASE_URL}/rrhh/catalogs`, {
+    headers: authHeaders(),
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<RrhhCatalogs>;
+}
+
+export async function searchOfficers(query?: string): Promise<OfficerRecord[]> {
+  const params = query?.trim() ? `?q=${encodeURIComponent(query.trim())}` : '';
+  const response = await fetch(`${API_BASE_URL}/rrhh/officers${params}`, {
+    headers: authHeaders(),
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<OfficerRecord[]>;
+}
+
+export async function createOfficer(
+  payload: CreateOfficerPayload,
+): Promise<OfficerRecord> {
+  const response = await fetch(`${API_BASE_URL}/rrhh/officers`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<OfficerRecord>;
+}
+
+export async function updateOfficer(
+  id: string,
+  payload: Partial<CreateOfficerPayload>,
+): Promise<OfficerRecord> {
+  const response = await fetch(`${API_BASE_URL}/rrhh/officers/${id}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<OfficerRecord>;
+}
+
+export async function setOfficerCredentials(
+  id: string,
+  password: string,
+): Promise<OfficerRecord> {
+  const response = await fetch(`${API_BASE_URL}/rrhh/officers/${id}/credentials`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ password }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<OfficerRecord>;
+}
+
+export async function updateOfficerPermissions(
+  id: string,
+  permissions: SitopPermission[],
+): Promise<OfficerRecord> {
+  const response = await fetch(`${API_BASE_URL}/rrhh/officers/${id}/permissions`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ permissions }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<OfficerRecord>;
+}

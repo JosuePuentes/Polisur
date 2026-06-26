@@ -1,20 +1,22 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { CreatePromocionForm } from '@/components/academia/create-promocion-form';
+import { EnrollmentForm } from '@/components/academia/enrollment-form';
+import { PromocionCard } from '@/components/academia/promocion-card';
 import { getSession } from '@/lib/auth';
 import {
   fetchAcademyDepartment,
   fetchPromociones,
 } from '@/lib/api/academy';
-import { EnrollmentForm } from '@/components/academia/enrollment-form';
-import { PromocionCard } from '@/components/academia/promocion-card';
+import { hasPermission, SITOP_PERMISSIONS } from '@/lib/permissions';
 import type {
   GraduatePromocionResult,
   Promocion,
 } from '@/lib/types/academy.types';
 
-function canAccessAcademy(rangeRole: string): boolean {
-  return rangeRole === 'SUPER_ADMIN' || rangeRole === 'JEFE_DEPARTAMENTO';
+function canAccessAcademy(session: ReturnType<typeof getSession>): boolean {
+  return hasPermission(session?.permissions, SITOP_PERMISSIONS.ACADEMY_VIEW);
 }
 
 export default function AcademiaPage() {
@@ -60,7 +62,7 @@ export default function AcademiaPage() {
 
   if (!session) return null;
 
-  if (!canAccessAcademy(session.rangeRole)) {
+  if (!canAccessAcademy(session)) {
     return (
       <div className="rounded-xl border border-red-500/30 bg-red-950/20 px-6 py-12 text-center">
         <p className="text-sm text-red-200">
@@ -121,11 +123,18 @@ export default function AcademiaPage() {
 
       {!loading && !loadError && (
         <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
-          <EnrollmentForm
-            promociones={promociones}
-            departmentId={departmentId}
-            onEnrolled={() => void loadData()}
-          />
+          <div className="space-y-4">
+            {hasPermission(session.permissions, SITOP_PERMISSIONS.ACADEMY_PROMOCIONES) && (
+              <CreatePromocionForm onCreated={() => void loadData()} />
+            )}
+            {hasPermission(session.permissions, SITOP_PERMISSIONS.ACADEMY_DISCENTES) && (
+              <EnrollmentForm
+                promociones={promociones}
+                departmentId={departmentId}
+                onEnrolled={() => void loadData()}
+              />
+            )}
+          </div>
 
           <section className="space-y-4">
             <header>

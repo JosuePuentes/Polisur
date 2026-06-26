@@ -9,12 +9,21 @@ interface IncidentListProps {
   onSelect: (incident: Incident) => void;
   onIncidentsChange?: (incidents: Incident[], loading: boolean) => void;
   refreshKey?: number;
+  originFilter?: string;
 }
+
+const ORIGIN_LABELS: Record<string, string> = {
+  ALL: 'Todos',
+  INTERNO: 'Internos / patrullajes',
+  PUBLICO_ANONIMO: 'Denuncias ciudadanas',
+  PUBLICO_PANICO: 'Botón de pánico',
+};
 
 export function IncidentList({
   onSelect,
   onIncidentsChange,
   refreshKey = 0,
+  originFilter = 'ALL',
 }: IncidentListProps) {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +49,11 @@ export function IncidentList({
   useEffect(() => {
     void loadIncidents();
   }, [loadIncidents, refreshKey]);
+
+  const filteredIncidents = incidents.filter((incident) => {
+    if (originFilter === 'ALL') return true;
+    return (incident.origen ?? 'INTERNO') === originFilter;
+  });
 
   if (loading) {
     return (
@@ -69,14 +83,11 @@ export function IncidentList({
     );
   }
 
-  if (incidents.length === 0) {
+  if (filteredIncidents.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/20 px-6 py-16 text-center">
         <p className="text-sm font-medium text-slate-400">
-          No hay incidentes asignados a esta comisión
-        </p>
-        <p className="mt-2 text-xs text-slate-600">
-          Los casos aparecerán aquí según su rango y ámbito operativo.
+          No hay incidentes en este filtro
         </p>
       </div>
     );
@@ -89,8 +100,8 @@ export function IncidentList({
           Registro de Incidentes Activos
         </h2>
         <p className="mt-0.5 text-xs text-slate-500">
-          {incidents.length} expediente{incidents.length !== 1 ? 's' : ''} en
-          su bandeja
+          {filteredIncidents.length} expediente{filteredIncidents.length !== 1 ? 's' : ''}
+          {originFilter !== 'ALL' ? ` · ${ORIGIN_LABELS[originFilter] ?? originFilter}` : ''}
         </p>
       </div>
 
@@ -102,11 +113,12 @@ export function IncidentList({
               <th className="px-5 py-3 font-medium">Delito</th>
               <th className="px-5 py-3 font-medium">Parroquia</th>
               <th className="px-5 py-3 font-medium">Cuadrante</th>
+              <th className="px-5 py-3 font-medium">Origen</th>
               <th className="px-5 py-3 font-medium">Estatus</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/80">
-            {incidents.map((incident) => (
+            {filteredIncidents.map((incident) => (
               <tr
                 key={incident.id}
                 onClick={() => onSelect(incident)}
@@ -131,6 +143,9 @@ export function IncidentList({
                 </td>
                 <td className="px-5 py-3.5 text-slate-400">
                   {incident.cuadrante}
+                </td>
+                <td className="px-5 py-3.5 text-slate-400">
+                  {(incident.origen ?? 'INTERNO').replace(/_/g, ' ')}
                 </td>
                 <td className="px-5 py-3.5">
                   <StatusBadge status={incident.status} />

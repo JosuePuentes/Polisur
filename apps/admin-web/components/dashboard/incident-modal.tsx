@@ -3,7 +3,9 @@
 import { AuthenticatedEvidenceImage } from '@/components/dashboard/authenticated-evidence-image';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { uploadEvidence } from '@/lib/api/incidents';
+import { uploadEvidence, updateIncidentStatus } from '@/lib/api/incidents';
+import { getSession } from '@/lib/auth';
+import { hasPermission, SITOP_PERMISSIONS } from '@/lib/permissions';
 import { generateFiscalReport } from '@/lib/utils/pdf-generator';
 import type { EvidenceStage, Incident } from '@/lib/types/incident.types';
 import { StatusBadge } from './status-badge';
@@ -28,9 +30,23 @@ export function IncidentModal({
   const [localEvidence, setLocalEvidence] = useState(incident?.evidence ?? []);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [statusUpdating, setStatusUpdating] = useState(false);
+  const [localStatus, setLocalStatus] = useState(incident?.status ?? 'PENDIENTE');
+  const session = getSession();
+  const canChangeStatus = hasPermission(session?.permissions, SITOP_PERMISSIONS.INCIDENTS_STATUS);
+
+  const STATUS_OPTIONS = [
+    'PENDIENTE',
+    'DESPACHADO',
+    'EN_TRANSITO',
+    'PENDIENTE_RESEÑA',
+    'PROCESADO',
+    'CERRADO',
+  ] as const;
 
   useEffect(() => {
     setLocalEvidence(incident?.evidence ?? []);
+    setLocalStatus(incident?.status ?? 'PENDIENTE');
     setUploadError(null);
     setExportError(null);
   }, [incident]);
@@ -59,14 +75,15 @@ export function IncidentModal({
     [localEvidence],
   );
 
-  const isProcessed = incident?.status === 'PROCESADO';
-  const isImmutable = isProcessed || incident?.status === 'CERRADO';
+  const isProcessed = localStatus === 'PROCESADO';
+  const isImmutable = isProcessed || localStatus === 'CERRADO';
   const canUpload =
+    hasPermission(session?.permissions, SITOP_PERMISSIONS.INCIDENTS_EVIDENCE) &&
     !isImmutable &&
-    (incident?.status === 'PENDIENTE' ||
-      incident?.status === 'PENDIENTE_RESEÑA' ||
-      incident?.status === 'EN_TRANSITO' ||
-      incident?.status === 'DESPACHADO');
+    (localStatus === 'PENDIENTE' ||
+      localStatus === 'PENDIENTE_RESEÑA' ||
+      localStatus === 'EN_TRANSITO' ||
+      localStatus === 'DESPACHADO');
 
   const nextStage = useMemo((): EvidenceStage | null => {
     if (retornoCount < RETORNO_CALLE_LIMIT) return 'RETORNO_CALLE';
@@ -114,6 +131,21 @@ export function IncidentModal({
     }
   }
 
+  async function handleStatusChange(nextStatus: string) {
+    if (!incident || !canChangeStatus) return;
+    setStatusUpdating(true);
+    setUploadError(null);
+    try {
+      const updated = await updateIncidentStatus(incident.id, nextStatus);
+      setLocalStatus(updated.status);
+      onEvidenceUploaded?.();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'No se pudo cambiar el estatus');
+    } finally {
+      setStatusUpdating(false);
+    }
+  }
+
   async function handleExportPdf() {
     if (!incident) return;
     setExportingPdf(true);
@@ -157,8 +189,11 @@ export function IncidentModal({
               {incident.code}
             </h2>
             <div className="mt-2">
-              <StatusBadge status={incident.status} />
+              <StatusBadge status={localStatus} />
             </div>
+            {incident.origen && (
+              <p className="mt-2 text-xs text-slate-500">Origen: {incident.origen.replace(/_/g, ' ')}</p>
+            )}
           </div>
           <div className="flex flex-col items-end gap-2">
             {isProcessed && (
@@ -238,6 +273,25 @@ export function IncidentModal({
               {incident.descripcion}
             </p>
           </section>
+
+          {canChangeStatus && !isImmutable && (
+            <section className="mt-4 rounded-lg border border-slate-800 bg-slate-950/40 px-4 py-4">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-slate-500">Cambiar estatus operativo</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {STATUS_OPTIONS.filter((status) => status !== localStatus).map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    disabled={statusUpdating}
+                    onClick={() => void handleStatusChange(status)}
+                    className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:border-cyan-500/40 hover:text-cyan-300"
+                  >
+                    → {status.replace(/_/g, ' ')}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Anexo fotográfico */}
           <section className="mt-6">

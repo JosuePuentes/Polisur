@@ -8,7 +8,9 @@ import { BootstrapModule } from './bootstrap/bootstrap.module';
 import { HealthModule } from './health/health.module';
 import { IncidentsModule } from './incidents/incidents.module';
 import { PublicIncidentsModule } from './public-incidents/public-incidents.module';
+import { RrhhModule } from './rrhh/rrhh.module';
 import { TacticalModule } from './realtime/tactical.module';
+import { PermissionsGuard } from './common/guards/permissions.guard';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { TacticalModule } from './realtime/tactical.module';
     AcademyModule,
     IncidentsModule,
     PublicIncidentsModule,
+    RrhhModule,
   ],
+  providers: [PermissionsGuard],
 })
 export class AppModule {}

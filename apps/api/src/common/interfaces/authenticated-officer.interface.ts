@@ -5,4 +5,5 @@ export interface AuthenticatedOfficer {
   rangeRole: RangeRole;
   departmentId: string;
   squadId?: string | null;
+  permissions: string[];
 }

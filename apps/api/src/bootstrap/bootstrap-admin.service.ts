@@ -11,6 +11,8 @@ export class BootstrapAdminService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit(): Promise<void> {
+    await this.ensureOrganizationalStructure();
+
     const cedula = process.env.BOOTSTRAP_CEDULA?.trim();
     const password = process.env.BOOTSTRAP_PASSWORD;
 
@@ -25,20 +27,31 @@ export class BootstrapAdminService implements OnModuleInit {
       return;
     }
 
-    const officerCount = await this.prisma.officer.count();
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const existing = await this.prisma.officer.findUnique({ where: { cedula } });
 
-    if (officerCount > 0) {
-      const existing = await this.prisma.officer.findUnique({
-        where: { cedula },
+    if (existing) {
+      await this.prisma.officer.update({
+        where: { id: existing.id },
+        data: { passwordHash, isSuspended: false },
       });
+      this.logger.log(`Bootstrap: credenciales actualizadas para cédula ${cedula}`);
+      return;
+    }
 
-      if (!existing) {
-        this.logger.log(
-          'Bootstrap omitido: ya existen funcionarios y la cédula configurada no está registrada.',
-        );
-        return;
-      }
+    const officerCount = await this.prisma.officer.count();
+    if (officerCount > 0) {
+      this.logger.log(
+        'Bootstrap omitido: ya existen funcionarios y la cédula configurada no está registrada.',
+      );
+      return;
+    }
 
+    const department = await this.prisma.department.findFirst({
+      where: { code: 'DECT' },
+    });
+
+    if (!department) {
       return;
     }
 
@@ -47,17 +60,6 @@ export class BootstrapAdminService implements OnModuleInit {
     const credentialNumber =
       process.env.BOOTSTRAP_CREDENTIAL?.trim() ||
       `POL-ADM-${cedula.replace(/\D/g, '').slice(-8)}`;
-    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-
-    const department =
-      (await this.prisma.department.findFirst({ where: { code: 'DECT' } })) ??
-      (await this.prisma.department.create({
-        data: {
-          code: 'DECT',
-          name: 'Dirección de Estrategia y Control Táctico',
-          description: 'Mando General — bootstrap inicial',
-        },
-      }));
 
     await this.prisma.officer.create({
       data: {
@@ -72,5 +74,40 @@ export class BootstrapAdminService implements OnModuleInit {
     });
 
     this.logger.log(`Usuario inicial creado (SUPER_ADMIN): cédula ${cedula}`);
+  }
+
+  private async ensureOrganizationalStructure(): Promise<void> {
+    const departmentCount = await this.prisma.department.count();
+    if (departmentCount > 0) {
+      return;
+    }
+
+    const dect = await this.prisma.department.create({
+      data: {
+        code: 'DECT',
+        name: 'Dirección de Estrategia y Control Táctico',
+        description: 'Academia / Mando General municipal',
+      },
+    });
+
+    const dian = await this.prisma.department.create({
+      data: {
+        code: 'DIAN',
+        name: 'Dirección de Inteligencia y Antidrogas',
+        description: 'Comando de inteligencia e intervención antidrogas',
+      },
+    });
+
+    await this.prisma.squad.create({
+      data: {
+        name: 'Escuadra Táctica de Intervención A',
+        callsign: 'ETA-ALPHA',
+        departmentId: dian.id,
+      },
+    });
+
+    this.logger.log(
+      `Estructura organizacional inicial creada (DECT, DIAN, escuadra ${dect.code}/${dian.code})`,
+    );
   }
 }

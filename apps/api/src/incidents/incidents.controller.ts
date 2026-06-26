@@ -21,8 +21,11 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CreateIncidentDto } from '@polisur/database';
+import { SITOP_PERMISSIONS } from '@polisur/database';
 import { AuditController } from '../audit/decorators/audit-controller.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { GetUser } from '../common/decorators/get-user.decorator';
 import { AuthenticatedOfficer } from '../common/interfaces/authenticated-officer.interface';
 import { resolveClientIp } from '../common/utils/client-ip.util';
@@ -39,11 +42,19 @@ import {
 @ApiBearerAuth('JWT')
 @AuditController()
 @Controller('incidents')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class IncidentsController {
   constructor(private readonly incidentsService: IncidentsService) {}
 
+  @Get('catalogs')
+  @RequirePermissions(SITOP_PERMISSIONS.INCIDENTS_CREATE)
+  @ApiOperation({ summary: 'Catálogos operativos para crear incidentes' })
+  getCatalogs(@GetUser() officer: AuthenticatedOfficer) {
+    return this.incidentsService.getOperationalCatalogs(officer);
+  }
+
   @Post()
+  @RequirePermissions(SITOP_PERMISSIONS.INCIDENTS_CREATE)
   @ApiOperation({ summary: 'Registrar un nuevo incidente táctico' })
   @ApiResponse({ status: 201, description: 'Incidente creado exitosamente' })
   create(
@@ -54,6 +65,7 @@ export class IncidentsController {
   }
 
   @Get()
+  @RequirePermissions(SITOP_PERMISSIONS.INCIDENTS_VIEW)
   @ApiOperation({
     summary: 'Listar incidentes según el rol y ámbito del funcionario autenticado',
   })
@@ -70,6 +82,7 @@ export class IncidentsController {
   }
 
   @Post('evidence')
+  @RequirePermissions(SITOP_PERMISSIONS.INCIDENTS_EVIDENCE)
   @UseInterceptors(EvidenceUploadInterceptor('file'))
   @ApiOperation({
     summary: 'Adjuntar evidencia fotográfica optimizada (Sharp → WebP)',
@@ -128,6 +141,7 @@ export class IncidentsController {
   }
 
   @Get('evidence/:filename')
+  @RequirePermissions(SITOP_PERMISSIONS.INCIDENTS_VIEW)
   @ApiOperation({
     summary: 'Descargar evidencia WebP protegida',
     description:
@@ -145,6 +159,7 @@ export class IncidentsController {
   }
 
   @Patch(':id/status')
+  @RequirePermissions(SITOP_PERMISSIONS.INCIDENTS_STATUS)
   @ApiOperation({ summary: 'Actualizar el estatus procesal de un incidente' })
   @ApiResponse({ status: 200, description: 'Estatus actualizado' })
   updateStatus(

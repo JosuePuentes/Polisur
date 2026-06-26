@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { PrismaService } from '@polisur/database';
+import { PrismaService, resolveOfficerPermissions } from '@polisur/database';
 import * as bcrypt from 'bcrypt';
 import { TIMING_SAFE_DUMMY_HASH } from './constants/auth.constants';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
@@ -20,6 +20,13 @@ const OFFICER_PUBLIC_SELECT = {
   rangeRole: true,
   credentialNumber: true,
   qrToken: true,
+  telefono: true,
+  email: true,
+  fechaNacimiento: true,
+  direccion: true,
+  grado: true,
+  fechaIngreso: true,
+  permissions: true,
   isSuspended: true,
   createdAt: true,
   updatedAt: true,
@@ -50,7 +57,7 @@ export class AuthService {
     const hashToCompare = officer?.passwordHash ?? TIMING_SAFE_DUMMY_HASH;
     const passwordMatches = await bcrypt.compare(passwordPlain, hashToCompare);
 
-    if (!officer || officer.isSuspended || !passwordMatches) {
+    if (!officer || officer.isSuspended || !officer.passwordHash || !passwordMatches) {
       return null;
     }
 
@@ -59,11 +66,17 @@ export class AuthService {
   }
 
   login(officer: SafeOfficer): LoginResponse {
+    const permissions = resolveOfficerPermissions({
+      rangeRole: officer.rangeRole,
+      permissions: officer.permissions,
+    });
+
     const payload: JwtPayload = {
       sub: officer.id,
       rangeRole: officer.rangeRole,
       departmentId: officer.departmentId,
       squadId: officer.squadId ?? null,
+      permissions,
     };
 
     const accessToken = this.jwtService.sign(payload);

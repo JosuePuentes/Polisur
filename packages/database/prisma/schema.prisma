@@ -107,9 +107,16 @@ model Officer {
   nombres          String    @db.VarChar(80)
   apellidos        String    @db.VarChar(80)
   rangeRole        RangeRole @default(OFICIAL_ACTIVO)
-  passwordHash     String    @db.VarChar(255)
+  passwordHash     String?   @db.VarChar(255)
   credentialNumber String    @unique @db.VarChar(32)
   qrToken          String    @unique @default(cuid()) @db.VarChar(64)
+  telefono         String?   @db.VarChar(20)
+  email            String?   @db.VarChar(120)
+  fechaNacimiento  DateTime? @db.Date
+  direccion        String?   @db.VarChar(200)
+  grado            String?   @db.VarChar(60)
+  fechaIngreso     DateTime? @db.Date
+  permissions      String[]  @default([])
   isSuspended      Boolean   @default(false)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt

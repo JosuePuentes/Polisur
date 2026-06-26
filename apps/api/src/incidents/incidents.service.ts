@@ -95,6 +95,57 @@ export class IncidentsService {
 
 
 
+  async getOperationalCatalogs(actor: AuthenticatedOfficer): Promise<{
+    departments: Array<{
+      id: string;
+      code: string;
+      name: string;
+      squads: Array<{ id: string; name: string; callsign: string | null }>;
+    }>;
+  }> {
+    const departments = await this.prisma.department.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        squads: {
+          where: { isActive: true },
+          select: { id: true, name: true, callsign: true, departmentId: true },
+          orderBy: { name: 'asc' },
+        },
+      },
+    });
+
+    if (actor.rangeRole === RangeRole.SUPER_ADMIN) {
+      return { departments };
+    }
+
+    if (actor.rangeRole === RangeRole.JEFE_DEPARTAMENTO) {
+      return {
+        departments: departments
+          .filter((department) => department.id === actor.departmentId)
+          .map((department) => ({ ...department })),
+      };
+    }
+
+    if (actor.rangeRole === RangeRole.OFICIAL_ACTIVO) {
+      return {
+        departments: departments
+          .filter((department) => department.id === actor.departmentId)
+          .map((department) => ({
+            ...department,
+            squads: department.squads.filter(
+              (squad) => squad.id === actor.squadId,
+            ),
+          })),
+      };
+    }
+
+    return { departments: [] };
+  }
+
   async create(
 
     dto: CreateIncidentDto,

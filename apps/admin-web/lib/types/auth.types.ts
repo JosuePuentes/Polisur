@@ -1,3 +1,5 @@
+import type { SitopPermission } from '@/lib/permissions';
+
 export interface LoginRequest {
   cedula: string;
   password: string;
@@ -14,6 +16,7 @@ export interface JwtPayload {
   rangeRole: string;
   departmentId: string;
   squadId?: string | null;
+  permissions?: string[];
   iat?: number;
   exp?: number;
 }
@@ -23,6 +26,7 @@ export interface OfficerSession {
   rangeRole: string;
   departmentId: string;
   squadId?: string | null;
+  permissions: SitopPermission[];
 }
 
 export interface ApiErrorBody {

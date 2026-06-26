@@ -5,4 +5,5 @@ export interface JwtPayload {
   rangeRole: RangeRole;
   departmentId: string;
   squadId?: string | null;
+  permissions: string[];
 }
