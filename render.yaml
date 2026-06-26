@@ -7,7 +7,7 @@ services:
     region: oregon
     plan: starter
     buildCommand: npm run build:render
-    startCommand: node apps/api/dist/main.js
+    startCommand: sh scripts/start-api.sh
     healthCheckPath: /api/health
     disk:
       name: sitop-evidence

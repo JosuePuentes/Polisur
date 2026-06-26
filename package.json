@@ -10,6 +10,7 @@
     "build:web": "npm run build --prefix apps/admin-web",
     "ci:install": "npm ci --prefix packages/database && npm ci --prefix apps/api && npm ci --prefix apps/admin-web",
     "build:render": "npm ci --prefix packages/database --include=dev && npm ci --prefix apps/api --include=dev && npm run build --prefix packages/database && npm run db:migrate:production --prefix packages/database && npm run build --prefix apps/api",
+    "start:render": "sh scripts/start-api.sh",
     "test:api": "npm run test --prefix apps/api"
   }
 }

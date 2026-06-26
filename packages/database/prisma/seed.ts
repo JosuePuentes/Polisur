@@ -22,9 +22,23 @@ async function clearDatabase(): Promise<void> {
   console.log('🧹 Limpiando tablas (orden seguro por FK)...');
 
   await prisma.$transaction(async (tx) => {
+    await tx.weaponAssignment.deleteMany();
+    await tx.weapon.deleteMany();
+    await tx.inventoryAsset.deleteMany();
+    await tx.officerShift.deleteMany();
+    await tx.detaineeHearing.deleteMany();
+    await tx.detaineeRecord.deleteMany();
+    await tx.detainee.deleteMany();
+    await tx.recoveredObject.deleteMany();
+    await tx.patrolMinuteOfficer.deleteMany();
+    await tx.patrolMinute.deleteMany();
+    await tx.peaceQuadrant.deleteMany();
+    await tx.controlPoint.deleteMany();
+    await tx.auditLog.deleteMany();
     await tx.incidentEvidence.deleteMany();
     await tx.incident.deleteMany();
     await tx.squad.updateMany({ data: { leaderId: null } });
+    await tx.department.updateMany({ data: { commanderId: null } });
     await tx.officer.updateMany({
       data: { squadId: null, promocionId: null },
     });
