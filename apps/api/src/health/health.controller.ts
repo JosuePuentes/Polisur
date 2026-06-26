@@ -31,6 +31,7 @@ export class HealthController {
       evidence_storage: {
         status: disk.status,
         writable: disk.writable,
+        persistent: disk.persistent,
         ...(isProd ? {} : { path: disk.path }),
       },
     };

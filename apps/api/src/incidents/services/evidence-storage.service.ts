@@ -13,19 +13,31 @@ export interface EvidenceStorageHealth {
   status: 'up' | 'down';
   path: string;
   writable: boolean;
+  persistent: boolean;
+}
+
+const PERSISTENT_MOUNT_PREFIX = '/var/data';
+
+function resolveFallbackStorageDir(): string {
+  return join(process.cwd(), 'uploads', 'evidence');
+}
+
+function isPersistentPath(path: string): boolean {
+  return path.startsWith(PERSISTENT_MOUNT_PREFIX);
 }
 
 @Injectable()
 export class EvidenceStorageService implements OnModuleInit {
   private readonly logger = new Logger(EvidenceStorageService.name);
 
-  private readonly storageDir =
+  private readonly preferredStorageDir =
     process.env.EVIDENCE_STORAGE_DIR ?? '/var/data/uploads/evidence';
 
   private readonly apiEvidenceBaseUrl =
     process.env.EVIDENCE_API_BASE_URL ??
     `${process.env.API_PUBLIC_URL ?? 'http://localhost:3001'}/api/incidents/evidence`;
 
+  private storageDir = resolveFallbackStorageDir();
   private writable = false;
 
   getStorageDir(): string {
@@ -37,26 +49,60 @@ export class EvidenceStorageService implements OnModuleInit {
   }
 
   async ensureStorageReady(): Promise<void> {
-    await mkdir(this.storageDir, { recursive: true });
-    try {
-      await access(this.storageDir, constants.W_OK | constants.R_OK);
-      this.writable = true;
-      this.logger.log(`Almacén de evidencias listo: ${this.storageDir}`);
-    } catch {
-      this.writable = false;
-      this.logger.error(
-        `El directorio de evidencias no es escribible: ${this.storageDir}. ` +
-          'En Render, monte un disco persistente en /var/data y configure EVIDENCE_STORAGE_DIR=/var/data/uploads/evidence',
-      );
+    const fallbackDir = resolveFallbackStorageDir();
+    const candidates = [
+      this.preferredStorageDir,
+      ...(this.preferredStorageDir !== fallbackDir ? [fallbackDir] : []),
+    ];
+
+    for (const candidate of candidates) {
+      try {
+        await mkdir(candidate, { recursive: true });
+        await access(candidate, constants.W_OK | constants.R_OK);
+        this.storageDir = candidate;
+        this.writable = true;
+
+        if (candidate !== this.preferredStorageDir) {
+          this.logger.warn(
+            `Almacén persistente no disponible (${this.preferredStorageDir}). ` +
+              `Usando ruta efímera: ${candidate}. ` +
+              'En Render, monte un disco en /var/data y configure EVIDENCE_STORAGE_DIR=/var/data/uploads/evidence',
+          );
+        } else {
+          this.logger.log(`Almacén de evidencias listo: ${candidate}`);
+        }
+        return;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'error desconocido';
+        this.logger.warn(
+          `No se pudo preparar almacén en ${candidate}: ${message}`,
+        );
+      }
     }
+
+    this.writable = false;
+    this.logger.error(
+      'Almacén de evidencias no disponible; las cargas de fotos fallarán hasta corregir permisos o montaje de disco.',
+    );
   }
 
   async getHealth(): Promise<EvidenceStorageHealth> {
     try {
       await access(this.storageDir, constants.W_OK | constants.R_OK);
-      return { status: 'up', path: this.storageDir, writable: true };
+      return {
+        status: 'up',
+        path: this.storageDir,
+        writable: true,
+        persistent: isPersistentPath(this.storageDir),
+      };
     } catch {
-      return { status: 'down', path: this.storageDir, writable: false };
+      return {
+        status: 'down',
+        path: this.storageDir,
+        writable: false,
+        persistent: isPersistentPath(this.storageDir),
+      };
     }
   }
 
