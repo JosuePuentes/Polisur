@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import L from 'leaflet';
 import {
+  CircleMarker,
   MapContainer,
   Marker,
   Popup,
@@ -10,6 +11,7 @@ import {
   useMap,
 } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import { opsApi } from '@/lib/api/operations';
 import {
   DARK_MATTER_ATTRIBUTION,
   DARK_MATTER_TILE_URL,
@@ -24,6 +26,7 @@ interface TacticalMapProps {
   incidents: Incident[];
   loading?: boolean;
   onViewExpediente: (incident: Incident) => void;
+  showHeatmapToggle?: boolean;
 }
 
 function fixLeafletDefaultIcons(): void {
@@ -90,10 +93,22 @@ export function TacticalMap({
   incidents,
   loading,
   onViewExpediente,
+  showHeatmapToggle = true,
 }: TacticalMapProps) {
   useEffect(() => {
     fixLeafletDefaultIcons();
   }, []);
+
+  const [heatmapOn, setHeatmapOn] = useState(false);
+  const [heatmap, setHeatmap] = useState<{
+    patrols: Array<{ latitude: number | null; longitude: number | null }>;
+    incidents: Array<{ latitude: number | null; longitude: number | null }>;
+  }>({ patrols: [], incidents: [] });
+
+  useEffect(() => {
+    if (!heatmapOn) return;
+    void opsApi.heatmap().then((data) => setHeatmap(data as typeof heatmap)).catch(() => setHeatmap({ patrols: [], incidents: [] }));
+  }, [heatmapOn]);
 
   const markers = useMemo(
     () =>
@@ -120,6 +135,15 @@ export function TacticalMap({
           </p>
         </div>
         <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-wider text-slate-500">
+          {showHeatmapToggle && (
+            <button
+              type="button"
+              onClick={() => setHeatmapOn((v) => !v)}
+              className={`rounded px-2 py-1 ${heatmapOn ? 'bg-orange-900/50 text-orange-300' : 'bg-slate-800 text-slate-400'}`}
+            >
+              {heatmapOn ? 'Ocultar calor' : 'Mapa de calor'}
+            </button>
+          )}
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
             En tránsito
@@ -151,6 +175,28 @@ export function TacticalMap({
             url={DARK_MATTER_TILE_URL}
           />
           <MapBounds incidents={incidents} />
+
+          {heatmapOn && heatmap.patrols.map((p, i) => (
+            p.latitude != null && p.longitude != null ? (
+              <CircleMarker
+                key={`patrol-${i}`}
+                center={[p.latitude, p.longitude]}
+                radius={12}
+                pathOptions={{ color: '#f97316', fillColor: '#f97316', fillOpacity: 0.35, weight: 0 }}
+              />
+            ) : null
+          ))}
+
+          {heatmapOn && heatmap.incidents.map((p, i) => (
+            p.latitude != null && p.longitude != null ? (
+              <CircleMarker
+                key={`heat-inc-${i}`}
+                center={[p.latitude, p.longitude]}
+                radius={14}
+                pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.4, weight: 0 }}
+              />
+            ) : null
+          ))}
 
           {markers.map(({ incident, position, icon }) => (
             <Marker key={incident.id} position={position} icon={icon}>

@@ -200,7 +200,13 @@ export class OperationsService {
       where: { id },
       include: {
         hearings: { orderBy: { fecha: 'desc' } },
-        records: { orderBy: { fecha: 'desc' }, include: { officer: { select: { nombres: true, apellidos: true } } } },
+        records: {
+          orderBy: { fecha: 'desc' },
+          include: {
+            officer: { select: { nombres: true, apellidos: true } },
+            incident: { select: { id: true, code: true, tipoDelito: true } },
+          },
+        },
       },
     });
   }
@@ -214,6 +220,7 @@ export class OperationsService {
     notas?: string;
     delitoInicial?: string;
     officerId?: string;
+    incidentId?: string;
   }): Promise<unknown> {
     return this.prisma.detainee.create({
       data: {
@@ -223,11 +230,12 @@ export class OperationsService {
         alias: data.alias,
         cellNumber: data.cellNumber,
         notas: data.notas,
-        records: data.delitoInicial
+        records: data.delitoInicial || data.incidentId
           ? {
               create: {
-                delito: data.delitoInicial,
+                delito: data.delitoInicial ?? 'Vinculado a incidente',
                 officerId: data.officerId,
+                incidentId: data.incidentId,
               },
             }
           : undefined,
@@ -316,7 +324,11 @@ export class OperationsService {
     });
   }
 
-  async checkInShift(shiftId: string, officerId: string): Promise<unknown> {
+  async checkInShift(
+    shiftId: string,
+    officerId: string,
+    coords?: { latitude?: number; longitude?: number },
+  ): Promise<unknown> {
     const shift = await this.prisma.officerShift.findUnique({ where: { id: shiftId } });
     if (!shift || shift.officerId !== officerId) {
       throw new NotFoundException('Guardia no encontrada');
@@ -324,7 +336,12 @@ export class OperationsService {
 
     return this.prisma.officerShift.update({
       where: { id: shiftId },
-      data: { status: ShiftStatus.ON_DUTY_ACTIVE, checkedInAt: new Date() },
+      data: {
+        status: ShiftStatus.ON_DUTY_ACTIVE,
+        checkedInAt: new Date(),
+        checkInLatitude: coords?.latitude ?? null,
+        checkInLongitude: coords?.longitude ?? null,
+      },
     });
   }
 
@@ -375,17 +392,63 @@ export class OperationsService {
 
   // ─── LOGÍSTICA ──────────────────────────────────────────────────────────────
 
-  listInventory(departmentId?: string): Promise<unknown[]> {
+  listInventory(departmentId?: string, turno?: string): Promise<unknown[]> {
     return this.prisma.inventoryAsset.findMany({
-      where: departmentId ? { departmentId } : undefined,
+      where: {
+        ...(departmentId ? { departmentId } : {}),
+        ...(turno ? { turno } : {}),
+      },
       orderBy: { assetType: 'asc' },
-      include: { department: { select: { name: true, code: true } } },
+      include: {
+        department: { select: { name: true, code: true } },
+        assignedOfficer: {
+          select: { id: true, nombres: true, apellidos: true, cedula: true },
+        },
+      },
     });
   }
 
-  async inventorySummary(): Promise<unknown[]> {
+  async inventoryByShift(departmentId: string, fecha?: string): Promise<unknown> {
+    const day = fecha ? new Date(fecha) : new Date();
+    day.setHours(0, 0, 0, 0);
+
+    const [shifts, assets] = await Promise.all([
+      this.prisma.officerShift.findMany({
+        where: { departmentId, fecha: day },
+        orderBy: { horaInicio: 'asc' },
+        include: {
+          officer: {
+            select: { id: true, nombres: true, apellidos: true, grado: true },
+          },
+        },
+      }),
+      this.prisma.inventoryAsset.findMany({
+        where: { departmentId },
+        orderBy: { assetType: 'asc' },
+        include: {
+          assignedOfficer: {
+            select: { id: true, nombres: true, apellidos: true },
+          },
+        },
+      }),
+    ]);
+
+    const turnos = [...new Set(shifts.map((s) => `${s.horaInicio}-${s.horaFin}`))];
+    const byTurno = turnos.map((turnoLabel) => ({
+      turno: turnoLabel,
+      officers: shifts
+        .filter((s) => `${s.horaInicio}-${s.horaFin}` === turnoLabel)
+        .map((s) => s.officer),
+      assets: assets.filter((a) => a.turno === turnoLabel),
+    }));
+
+    return { fecha: day.toISOString().slice(0, 10), turnos: byTurno, unassigned: assets.filter((a) => !a.turno) };
+  }
+
+  async inventorySummary(departmentId?: string): Promise<unknown[]> {
     const rows = await this.prisma.inventoryAsset.groupBy({
       by: ['assetType', 'status'],
+      where: departmentId ? { departmentId } : undefined,
       _count: { id: true },
     });
     return rows;
@@ -400,6 +463,53 @@ export class OperationsService {
     notas?: string;
   }): Promise<unknown> {
     return this.prisma.inventoryAsset.create({ data });
+  }
+
+  async assignInventoryAsset(
+    assetId: string,
+    data: { officerId: string; turno: string },
+  ): Promise<unknown> {
+    const asset = await this.prisma.inventoryAsset.findUnique({ where: { id: assetId } });
+    if (!asset) throw new NotFoundException('Activo no encontrado');
+
+    return this.prisma.inventoryAsset.update({
+      where: { id: assetId },
+      data: {
+        assignedOfficerId: data.officerId,
+        turno: data.turno,
+        assignedAt: new Date(),
+      },
+      include: {
+        assignedOfficer: { select: { nombres: true, apellidos: true } },
+      },
+    });
+  }
+
+  async releaseInventoryAsset(assetId: string): Promise<unknown> {
+    const asset = await this.prisma.inventoryAsset.findUnique({ where: { id: assetId } });
+    if (!asset) throw new NotFoundException('Activo no encontrado');
+
+    return this.prisma.inventoryAsset.update({
+      where: { id: assetId },
+      data: {
+        assignedOfficerId: null,
+        turno: null,
+        assignedAt: null,
+      },
+    });
+  }
+
+  getMyShiftToday(officerId: string, fecha?: string): Promise<unknown> {
+    const day = fecha ? new Date(fecha) : new Date();
+    day.setHours(0, 0, 0, 0);
+
+    return this.prisma.officerShift.findFirst({
+      where: { officerId, fecha: day },
+      include: {
+        department: { select: { id: true, name: true, code: true } },
+        officer: { select: { nombres: true, apellidos: true, grado: true } },
+      },
+    });
   }
 
   // ─── PARQUE DE ARMAS ───────────────────────────────────────────────────────

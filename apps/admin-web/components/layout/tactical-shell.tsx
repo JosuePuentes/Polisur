@@ -10,12 +10,14 @@ const NAV_ITEMS = [
   { href: '/dashboard/patrullaje', label: 'Patrullaje / Minutas', permission: SITOP_PERMISSIONS.PATROL_VIEW },
   { href: '/dashboard/detenidos', label: 'Detenidos', permission: SITOP_PERMISSIONS.DETAINEES_VIEW },
   { href: '/dashboard/guardias', label: 'Guardias Activas', permission: SITOP_PERMISSIONS.SHIFTS_VIEW },
+  { href: '/dashboard/movil', label: 'App Móvil / GPS', permission: SITOP_PERMISSIONS.SHIFTS_VIEW },
   { href: '/dashboard/comandos', label: 'Comandos', permission: SITOP_PERMISSIONS.COMMANDS_VIEW },
   { href: '/dashboard/cuadrantes', label: 'Cuadrantes de Paz', permission: SITOP_PERMISSIONS.QUADRANTS_VIEW },
   { href: '/dashboard/logistica', label: 'Logística', permission: SITOP_PERMISSIONS.LOGISTICS_VIEW },
   { href: '/dashboard/parque-armas', label: 'Parque de Armas', permission: SITOP_PERMISSIONS.ARMORY_VIEW },
   { href: '/dashboard/academia', label: 'SITOP Academia', permission: SITOP_PERMISSIONS.ACADEMY_VIEW },
   { href: '/dashboard/rrhh', label: 'RRHH', permission: SITOP_PERMISSIONS.RRHH_VIEW },
+  { href: '/dashboard/auditoria', label: 'Auditoría', permission: SITOP_PERMISSIONS.AUDIT_VIEW },
   { href: '/public/denuncias', label: 'Portal Ciudadano', external: true },
 ];
 

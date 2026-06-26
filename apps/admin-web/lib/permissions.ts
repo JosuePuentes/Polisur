@@ -24,6 +24,7 @@ export const SITOP_PERMISSIONS = {
   LOGISTICS_MANAGE: 'logistics.manage',
   ARMORY_VIEW: 'armory.view',
   ARMORY_MANAGE: 'armory.manage',
+  AUDIT_VIEW: 'audit.view',
 } as const;
 
 export type SitopPermission =
@@ -55,6 +56,7 @@ export const PERMISSION_LABELS: Record<SitopPermission, string> = {
   [SITOP_PERMISSIONS.LOGISTICS_MANAGE]: 'Gestionar inventario',
   [SITOP_PERMISSIONS.ARMORY_VIEW]: 'Parque de armas',
   [SITOP_PERMISSIONS.ARMORY_MANAGE]: 'Asignar armas',
+  [SITOP_PERMISSIONS.AUDIT_VIEW]: 'Auditoría forense',
 };
 
 export function hasPermission(

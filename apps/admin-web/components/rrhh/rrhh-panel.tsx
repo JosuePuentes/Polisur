@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { fetchRrhhCatalogs, searchOfficers, createOfficer, setOfficerCredentials, updateOfficer, updateOfficerPermissions, createDepartment, createSquad } from '@/lib/api/rrhh';
+import { fetchRrhhCatalogs, searchOfficers, createOfficer, setOfficerCredentials, updateOfficer, updateOfficerPermissions, createDepartment, createSquad, transferOfficer, listPendingGraduates } from '@/lib/api/rrhh';
 import { getSession } from '@/lib/auth';
 import { hasPermission, PERMISSION_LABELS, SITOP_PERMISSIONS, type SitopPermission } from '@/lib/permissions';
 import type { CreateOfficerPayload, OfficerRecord, RrhhCatalogs } from '@/lib/types/rrhh.types';
@@ -50,9 +50,17 @@ export function RrhhPanel() {
   const [squadCallsign, setSquadCallsign] = useState('');
   const [squadDeptId, setSquadDeptId] = useState('');
   const [loading, setLoading] = useState(false);
+  const [transferDeptId, setTransferDeptId] = useState('');
+  const [transferSquadId, setTransferSquadId] = useState('');
+  const [pendingGraduates, setPendingGraduates] = useState<OfficerRecord[]>([]);
+  const [graduateTransfer, setGraduateTransfer] = useState<Record<string, { departmentId: string; squadId: string }>>({});
 
   const canManage = hasPermission(session?.permissions, SITOP_PERMISSIONS.RRHH_MANAGE);
   const canCredentials = hasPermission(session?.permissions, SITOP_PERMISSIONS.RRHH_CREDENTIALS);
+
+  const transferSquads = useMemo(() => {
+    return catalogs?.departments.find((d) => d.id === transferDeptId)?.squads ?? [];
+  }, [catalogs, transferDeptId]);
 
   const squads = useMemo(() => {
     return catalogs?.departments.find((d) => d.id === form.departmentId)?.squads ?? [];
@@ -104,6 +112,50 @@ export function RrhhPanel() {
     if (!form.departmentId && data.departments[0]) {
       setForm((prev) => ({ ...prev, departmentId: data.departments[0].id }));
     }
+    await loadPendingGraduates(data);
+  }
+
+  async function loadPendingGraduates(catalog?: RrhhCatalogs) {
+    if (!canManage) return;
+    try {
+      const list = await listPendingGraduates();
+      const cat = catalog ?? catalogs;
+      setPendingGraduates(list);
+      if (cat) {
+        const opDepts = cat.departments.filter((d) => d.code !== 'DECT');
+        setGraduateTransfer((prev) => {
+          const next = { ...prev };
+          for (const g of list) {
+            if (!next[g.id]) {
+              next[g.id] = { departmentId: opDepts[0]?.id ?? '', squadId: '' };
+            }
+          }
+          return next;
+        });
+      }
+    } catch {
+      setPendingGraduates([]);
+    }
+  }
+
+  async function handleAssignGraduate(officerId: string) {
+    const payload = graduateTransfer[officerId];
+    if (!payload?.departmentId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await transferOfficer(officerId, {
+        departmentId: payload.departmentId,
+        squadId: payload.squadId || null,
+      });
+      setMessage('Egresado asignado a comando operativo');
+      await loadPendingGraduates();
+      await runSearch(query);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo asignar egresado');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function runSearch(searchQuery?: string) {
@@ -128,6 +180,8 @@ export function RrhhPanel() {
     setSelected(officer);
     setSelectedPermissions(officer.permissions as SitopPermission[]);
     setCredentialPassword('');
+    setTransferDeptId(officer.departmentId);
+    setTransferSquadId(officer.squadId ?? '');
     setMode('search');
   }
 
@@ -201,6 +255,25 @@ export function RrhhPanel() {
     }
   }
 
+  async function handleTransfer() {
+    if (!selected || !transferDeptId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const updated = await transferOfficer(selected.id, {
+        departmentId: transferDeptId,
+        squadId: transferSquadId || null,
+      });
+      setSelected(updated);
+      setMessage(`Transferido a ${updated.department.name}`);
+      await runSearch(query);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo transferir');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleUpdateOfficer() {
     if (!selected) return;
     setLoading(true);
@@ -227,6 +300,31 @@ export function RrhhPanel() {
 
       {message && <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-200">{message}</div>}
       {error && <div className="rounded-xl border border-red-500/30 bg-red-950/20 px-4 py-3 text-sm text-red-200">{error}</div>}
+
+      {canManage && pendingGraduates.length > 0 && catalogs && (
+        <section className="rounded-xl border border-amber-500/30 bg-amber-950/10 p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-amber-200">Bandeja de egresados — pendientes de asignación</h2>
+          <p className="text-xs text-slate-400">Oficiales graduados en DECT sin escuadra operativa. Asigne comando y escuadra destino.</p>
+          {pendingGraduates.map((g) => {
+            const opDepts = catalogs.departments.filter((d) => d.code !== 'DECT');
+            const gt = graduateTransfer[g.id] ?? { departmentId: '', squadId: '' };
+            const squadsForDept = opDepts.find((d) => d.id === gt.departmentId)?.squads ?? [];
+            return (
+              <div key={g.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm">
+                <span className="text-slate-200">{g.nombres} {g.apellidos} · {g.cedula}</span>
+                <select className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs" value={gt.departmentId} onChange={(e) => setGraduateTransfer({ ...graduateTransfer, [g.id]: { departmentId: e.target.value, squadId: '' } })}>
+                  {opDepts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+                <select className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs" value={gt.squadId} onChange={(e) => setGraduateTransfer({ ...graduateTransfer, [g.id]: { ...gt, squadId: e.target.value } })}>
+                  <option value="">Sin escuadra</option>
+                  {squadsForDept.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                <button type="button" disabled={loading} onClick={() => void handleAssignGraduate(g.id)} className="rounded bg-cyan-800 px-2 py-1 text-xs text-white">Asignar</button>
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       {canManage && catalogs && (
         <div className="grid gap-4 md:grid-cols-2">
@@ -326,6 +424,20 @@ export function RrhhPanel() {
                   <p className="text-xs text-slate-500">Usuario de login: <strong className="text-slate-300">{selected.cedula}</strong></p>
                   <input type="password" minLength={8} placeholder="Nueva contraseña (mín. 8)" value={credentialPassword} onChange={(e) => setCredentialPassword(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" />
                   <button type="button" disabled={loading || credentialPassword.length < 8} onClick={() => void handleSetCredentials()} className="w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm text-white">Asignar clave</button>
+                </div>
+              )}
+
+              {canManage && catalogs && (
+                <div className="space-y-2 border-t border-slate-800 pt-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Transferencia de comando</h3>
+                  <select value={transferDeptId} onChange={(e) => setTransferDeptId(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm">
+                    {catalogs.departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                  <select value={transferSquadId} onChange={(e) => setTransferSquadId(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm">
+                    <option value="">Sin escuadra</option>
+                    {transferSquads.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  <button type="button" disabled={loading || transferDeptId === selected.departmentId && (transferSquadId || '') === (selected.squadId ?? '')} onClick={() => void handleTransfer()} className="w-full rounded-lg bg-amber-800 px-3 py-2 text-sm text-white">Transferir funcionario</button>
                 </div>
               )}
 

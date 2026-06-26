@@ -6,6 +6,8 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { PrismaService } from '@polisur/database';
 
+import { EvidenceStorageService } from '../incidents/services/evidence-storage.service';
+
 
 
 @ApiTags('Salud')
@@ -22,13 +24,15 @@ export class HealthController {
 
     private readonly prisma: PrismaService,
 
+    private readonly evidenceStorage: EvidenceStorageService,
+
   ) {}
 
 
 
   @Get()
 
-  @ApiOperation({ summary: 'Healthcheck de API y conectividad PostgreSQL' })
+  @ApiOperation({ summary: 'Healthcheck de API, PostgreSQL y almacén de evidencias' })
 
   check() {
 
@@ -36,7 +40,31 @@ export class HealthController {
 
       () => this.prismaHealth.pingCheck('database', this.prisma),
 
+      () => this.checkEvidenceStorage(),
+
     ]);
+
+  }
+
+
+
+  private async checkEvidenceStorage(): Promise<HealthIndicatorResult> {
+
+    const disk = await this.evidenceStorage.getHealth();
+
+    return {
+
+      evidence_storage: {
+
+        status: disk.status,
+
+        path: disk.path,
+
+        writable: disk.writable,
+
+      },
+
+    };
 
   }
 

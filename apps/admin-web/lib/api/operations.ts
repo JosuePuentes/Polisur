@@ -29,6 +29,8 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const opsApi = {
   listCommands: () => api<unknown[]>('/commands'),
+  updateCommand: (id: string, body: Record<string, unknown>) =>
+    api(`/commands/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   listQuadrants: () => api<unknown[]>('/quadrants'),
   createQuadrant: (body: unknown) => api('/quadrants', { method: 'POST', body: JSON.stringify(body) }),
   listPatrols: (departmentId?: string) =>
@@ -43,15 +45,46 @@ export const opsApi = {
   createDetainee: (body: unknown) => api('/detainees', { method: 'POST', body: JSON.stringify(body) }),
   addHearing: (id: string, body: unknown) =>
     api(`/detainees/${id}/hearings`, { method: 'POST', body: JSON.stringify(body) }),
-  listShifts: (fecha?: string) => api<unknown[]>(`/shifts${fecha ? `?fecha=${fecha}` : ''}`),
+  listShifts: (fecha?: string, departmentId?: string) => {
+    const params = new URLSearchParams();
+    if (fecha) params.set('fecha', fecha);
+    if (departmentId) params.set('departmentId', departmentId);
+    const qs = params.toString();
+    return api<unknown[]>(`/shifts${qs ? `?${qs}` : ''}`);
+  },
   activeRoster: (departmentId?: string) =>
     api<Array<{ officer: unknown; shift: unknown; dotStatus: string }>>(
       `/shifts/roster${departmentId ? `?departmentId=${departmentId}` : ''}`,
     ),
   createShift: (body: unknown) => api('/shifts', { method: 'POST', body: JSON.stringify(body) }),
-  checkInShift: (id: string) => api(`/shifts/${id}/check-in`, { method: 'POST' }),
-  listInventory: () => api<unknown[]>('/inventory'),
-  inventorySummary: () => api<unknown[]>('/inventory/summary'),
+  checkInShift: (id: string, body?: { latitude?: number; longitude?: number }) =>
+    api(`/shifts/${id}/check-in`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+  myShift: (fecha?: string) =>
+    api<{
+      id: string;
+      horaInicio: string;
+      horaFin: string;
+      status: string;
+      checkInLatitude: number | null;
+      checkInLongitude: number | null;
+      department: { name: string; code: string };
+    } | null>(`/shifts/mine${fecha ? `?fecha=${fecha}` : ''}`),
+  listInventory: (departmentId?: string, turno?: string) => {
+    const params = new URLSearchParams();
+    if (departmentId) params.set('departmentId', departmentId);
+    if (turno) params.set('turno', turno);
+    const qs = params.toString();
+    return api<unknown[]>(`/inventory${qs ? `?${qs}` : ''}`);
+  },
+  inventoryByShift: (departmentId: string, fecha?: string) =>
+    api<{ fecha: string; turnos: Array<{ turno: string; officers: unknown[]; assets: unknown[] }>; unassigned: unknown[] }>(
+      `/inventory/by-shift?departmentId=${departmentId}${fecha ? `&fecha=${fecha}` : ''}`,
+    ),
+  inventorySummary: (departmentId?: string) =>
+    api<unknown[]>(`/inventory/summary${departmentId ? `?departmentId=${departmentId}` : ''}`),
+  assignInventory: (id: string, body: { officerId: string; turno: string }) =>
+    api(`/inventory/${id}/assign`, { method: 'POST', body: JSON.stringify(body) }),
+  releaseInventory: (id: string) => api(`/inventory/${id}/release`, { method: 'POST' }),
   createAsset: (body: unknown) => api('/inventory', { method: 'POST', body: JSON.stringify(body) }),
   listWeapons: () => api<unknown[]>('/weapons'),
   createWeapon: (body: unknown) => api('/weapons', { method: 'POST', body: JSON.stringify(body) }),
@@ -59,6 +92,7 @@ export const opsApi = {
     api(`/weapons/${id}/assign`, { method: 'POST', body: JSON.stringify(body) }),
   returnWeapon: (assignmentId: string) =>
     api(`/weapons/assignments/${assignmentId}/return`, { method: 'POST' }),
+  weaponHistory: (weaponId: string) => api<unknown[]>(`/weapons/${weaponId}/history`),
   createControlPoint: (body: unknown) =>
     api('/control-points', { method: 'POST', body: JSON.stringify(body) }),
 };

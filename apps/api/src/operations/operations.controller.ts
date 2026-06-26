@@ -166,20 +166,36 @@ export class OperationsController {
 
   @Post('shifts/:id/check-in')
   @RequirePermissions(SITOP_PERMISSIONS.SHIFTS_MANAGE)
-  checkIn(@Param('id') id: string, @GetUser() actor: AuthenticatedOfficer): Promise<unknown> {
-    return this.operations.checkInShift(id, actor.id);
+  checkIn(
+    @Param('id') id: string,
+    @GetUser() actor: AuthenticatedOfficer,
+    @Body() body?: { latitude?: number; longitude?: number },
+  ): Promise<unknown> {
+    return this.operations.checkInShift(id, actor.id, body);
   }
 
   @Get('inventory')
   @RequirePermissions(SITOP_PERMISSIONS.LOGISTICS_VIEW)
-  listInventory(@Query('departmentId') departmentId?: string): Promise<unknown[]> {
-    return this.operations.listInventory(departmentId);
+  listInventory(
+    @Query('departmentId') departmentId?: string,
+    @Query('turno') turno?: string,
+  ): Promise<unknown[]> {
+    return this.operations.listInventory(departmentId, turno);
+  }
+
+  @Get('inventory/by-shift')
+  @RequirePermissions(SITOP_PERMISSIONS.LOGISTICS_VIEW)
+  inventoryByShift(
+    @Query('departmentId') departmentId: string,
+    @Query('fecha') fecha?: string,
+  ): Promise<unknown> {
+    return this.operations.inventoryByShift(departmentId, fecha);
   }
 
   @Get('inventory/summary')
   @RequirePermissions(SITOP_PERMISSIONS.LOGISTICS_VIEW)
-  inventorySummary(): Promise<unknown[]> {
-    return this.operations.inventorySummary();
+  inventorySummary(@Query('departmentId') departmentId?: string): Promise<unknown[]> {
+    return this.operations.inventorySummary(departmentId);
   }
 
   @Post('inventory')
@@ -196,6 +212,30 @@ export class OperationsController {
     },
   ): Promise<unknown> {
     return this.operations.createAsset(body);
+  }
+
+  @Post('inventory/:id/assign')
+  @RequirePermissions(SITOP_PERMISSIONS.LOGISTICS_MANAGE)
+  assignInventory(
+    @Param('id') id: string,
+    @Body() body: { officerId: string; turno: string },
+  ): Promise<unknown> {
+    return this.operations.assignInventoryAsset(id, body);
+  }
+
+  @Post('inventory/:id/release')
+  @RequirePermissions(SITOP_PERMISSIONS.LOGISTICS_MANAGE)
+  releaseInventory(@Param('id') id: string): Promise<unknown> {
+    return this.operations.releaseInventoryAsset(id);
+  }
+
+  @Get('shifts/mine')
+  @RequirePermissions(SITOP_PERMISSIONS.SHIFTS_VIEW)
+  myShift(
+    @GetUser() actor: AuthenticatedOfficer,
+    @Query('fecha') fecha?: string,
+  ): Promise<unknown> {
+    return this.operations.getMyShiftToday(actor.id, fecha);
   }
 
   @Get('weapons')

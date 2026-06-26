@@ -30,6 +30,7 @@
     "postinstall": "prisma generate --schema=./prisma/schema.prisma",
     "db:migrate": "prisma migrate dev --schema=./prisma/schema.prisma",
     "db:migrate:deploy": "prisma migrate deploy --schema=./prisma/schema.prisma",
+    "db:migrate:production": "sh prisma/migrate-production.sh",
     "db:push": "prisma db push --schema=./prisma/schema.prisma",
     "db:seed": "prisma db seed",
     "db:bootstrap": "ts-node --transpile-only prisma/bootstrap-admin.ts",

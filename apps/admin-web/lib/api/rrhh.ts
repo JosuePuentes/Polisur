@@ -120,3 +120,38 @@ export async function updateOfficerPermissions(
   if (!response.ok) throw new Error(await parseError(response));
   return response.json() as Promise<OfficerRecord>;
 }
+
+export async function transferOfficer(
+  id: string,
+  payload: { departmentId: string; squadId?: string | null },
+): Promise<OfficerRecord> {
+  const response = await fetch(`${API_BASE_URL}/rrhh/officers/${id}/transfer`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<OfficerRecord>;
+}
+
+export async function setSquadLeader(
+  squadId: string,
+  leaderId: string | null,
+): Promise<{ id: string; name: string; leaderId: string | null }> {
+  const response = await fetch(`${API_BASE_URL}/rrhh/squads/${squadId}/leader`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ leaderId }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json();
+}
+
+export async function listPendingGraduates(): Promise<OfficerRecord[]> {
+  const response = await fetch(`${API_BASE_URL}/rrhh/graduates/pending`, {
+    headers: authHeaders(),
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<OfficerRecord[]>;
+}

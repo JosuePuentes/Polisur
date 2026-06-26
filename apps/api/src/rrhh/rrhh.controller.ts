@@ -88,6 +88,22 @@ export class RrhhController {
     return this.rrhhService.setCredentials(id, dto);
   }
 
+  @Patch('squads/:id/leader')
+  @RequirePermissions(SITOP_PERMISSIONS.RRHH_MANAGE)
+  setSquadLeader(
+    @Param('id') id: string,
+    @Body() body: { leaderId: string | null },
+  ) {
+    return this.rrhhService.setSquadLeader(id, body.leaderId ?? null);
+  }
+
+  @Get('graduates/pending')
+  @RequirePermissions(SITOP_PERMISSIONS.RRHH_VIEW)
+  @ApiOperation({ summary: 'Egresados pendientes de asignación operativa' })
+  listPendingGraduates(): Promise<OfficerListItem[]> {
+    return this.rrhhService.listPendingGraduates();
+  }
+
   @Patch('officers/:id/transfer')
   @RequirePermissions(SITOP_PERMISSIONS.RRHH_MANAGE)
   transferOfficer(

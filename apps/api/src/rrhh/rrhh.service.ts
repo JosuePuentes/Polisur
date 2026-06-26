@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -272,6 +273,39 @@ export class RrhhService {
     });
   }
 
+  async setSquadLeader(squadId: string, leaderId: string | null) {
+    const squad = await this.prisma.squad.findUnique({ where: { id: squadId } });
+    if (!squad) {
+      throw new NotFoundException('Escuadra no encontrada');
+    }
+
+    if (leaderId) {
+      const officer = await this.prisma.officer.findUnique({ where: { id: leaderId } });
+      if (!officer || officer.departmentId !== squad.departmentId) {
+        throw new BadRequestException(
+          'El funcionario debe pertenecer al mismo comando que la escuadra',
+        );
+      }
+
+      await this.prisma.squad.updateMany({
+        where: { leaderId },
+        data: { leaderId: null },
+      });
+    }
+
+    return this.prisma.squad.update({
+      where: { id: squadId },
+      data: { leaderId },
+      select: {
+        id: true,
+        name: true,
+        callsign: true,
+        leaderId: true,
+        leader: { select: { id: true, nombres: true, apellidos: true } },
+      },
+    });
+  }
+
   async transferOfficer(
     id: string,
     data: { departmentId: string; squadId?: string | null },
@@ -291,6 +325,28 @@ export class RrhhService {
     });
 
     return this.toListItem(officer);
+  }
+
+  async listPendingGraduates(): Promise<OfficerListItem[]> {
+    const academyDept = await this.prisma.department.findFirst({
+      where: { code: 'DECT', isActive: true },
+      select: { id: true },
+    });
+
+    if (!academyDept) return [];
+
+    const officers = await this.prisma.officer.findMany({
+      where: {
+        rangeRole: RangeRole.OFICIAL_ACTIVO,
+        departmentId: academyDept.id,
+        squadId: null,
+        isSuspended: false,
+      },
+      select: OFFICER_LIST_SELECT,
+      orderBy: [{ updatedAt: 'desc' }, { apellidos: 'asc' }],
+    });
+
+    return officers.map((officer) => this.toListItem(officer));
   }
 
   async updatePermissions(

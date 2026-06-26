@@ -204,6 +204,7 @@ model Officer {
   shifts               OfficerShift[]
   weaponAssignments    WeaponAssignment[]    @relation("WeaponAssignee")
   assignedWeapons      WeaponAssignment[]    @relation("WeaponAssigner")
+  assignedInventory    InventoryAsset[]      @relation("InventoryAssignee")
   detaineeRecords      DetaineeRecord[]
 
   @@map("officers")
@@ -254,6 +255,7 @@ model Incident {
   squad   Squad  @relation(fields: [squadId], references: [id], onDelete: Restrict)
 
   evidence IncidentEvidence[]
+  detaineeRecords DetaineeRecord[]
 
   @@index([code], map: "idx_incident_code_btree")
   @@index([status], map: "idx_incident_status_btree")
@@ -484,6 +486,7 @@ model DetaineeRecord {
   detainee   Detainee @relation(fields: [detaineeId], references: [id], onDelete: Cascade)
 
   incidentId String?
+  incident   Incident? @relation(fields: [incidentId], references: [id], onDelete: SetNull)
   officerId  String?
   officer    Officer? @relation(fields: [officerId], references: [id], onDelete: SetNull)
 
@@ -502,6 +505,8 @@ model OfficerShift {
   horaFin     String      @db.VarChar(5)
   status      ShiftStatus @default(ON_DUTY_PENDING)
   checkedInAt DateTime?
+  checkInLatitude  Float?
+  checkInLongitude Float?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -529,14 +534,21 @@ model InventoryAsset {
   serialNumber String?     @db.VarChar(64)
   status       AssetStatus @default(OPERATIVO)
   notas        String?     @db.Text
+  turno        String?     @db.VarChar(20)
+  assignedAt   DateTime?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
+  assignedOfficerId String?
+  assignedOfficer   Officer? @relation("InventoryAssignee", fields: [assignedOfficerId], references: [id], onDelete: SetNull)
+
   @@index([assetType], map: "idx_inventory_type_btree")
   @@index([departmentId], map: "idx_inventory_dept_btree")
+  @@index([assignedOfficerId], map: "idx_inventory_officer_btree")
+  @@index([turno], map: "idx_inventory_turno_btree")
   @@map("inventory_assets")
 }
 

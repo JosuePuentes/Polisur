@@ -1,0 +1,32 @@
+# Blueprint Render — Polisur SITOP API
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: sitop-api
+    runtime: node
+    region: oregon
+    plan: starter
+    buildCommand: npm run build:render
+    startCommand: node apps/api/dist/main.js
+    healthCheckPath: /api/health
+    disk:
+      name: sitop-evidence
+      mountPath: /var/data
+      sizeGB: 5
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: API_PUBLIC_URL
+        sync: false
+      - key: EVIDENCE_STORAGE_DIR
+        value: /var/data/evidence
+      - key: BOOTSTRAP_CEDULA
+        sync: false
+      - key: BOOTSTRAP_PASSWORD
+        sync: false
