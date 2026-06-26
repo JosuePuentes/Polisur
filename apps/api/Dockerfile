@@ -41,13 +41,13 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3001
-ENV EVIDENCE_STORAGE_DIR=/var/data/evidence
+ENV EVIDENCE_STORAGE_DIR=/var/data/uploads/evidence
 ENV NODE_OPTIONS=--max-old-space-size=512
 ENV SHARP_CONCURRENCY=3
 
 RUN addgroup --system --gid 1001 polisur && \
     adduser --system --uid 1001 --ingroup polisur polisur && \
-    mkdir -p /var/data/evidence && \
+    mkdir -p /var/data/uploads/evidence && \
     chown -R polisur:polisur /var/data
 
 COPY --from=database-build /app/packages/database ./packages/database

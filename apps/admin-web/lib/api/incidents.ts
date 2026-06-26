@@ -88,6 +88,26 @@ export interface CreateIncidentPayload {
   squadId: string;
 }
 
+export interface CreateRadioDispatchPayload extends CreateIncidentPayload {
+  initialStatus?: 'EN_TRANSITO' | 'DESPACHADO';
+}
+
+export async function createRadioDispatch(
+  payload: CreateRadioDispatchPayload,
+): Promise<Incident> {
+  const response = await fetch(`${API_BASE_URL}/incidents/radio-dispatch`, {
+    method: 'POST',
+    headers: authHeadersJson(),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseIncidentError(response));
+  }
+
+  return response.json() as Promise<Incident>;
+}
+
 export async function createIncident(
   payload: CreateIncidentPayload,
 ): Promise<Incident> {

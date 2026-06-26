@@ -11,7 +11,7 @@ else
 fi
 
 echo "[polisur-api] Verificando almacén de evidencias…"
-EVIDENCE_DIR="${EVIDENCE_STORAGE_DIR:-/var/data/evidence}"
+EVIDENCE_DIR="${EVIDENCE_STORAGE_DIR:-/var/data/uploads/evidence}"
 mkdir -p "$EVIDENCE_DIR" 2>/dev/null || true
 
 echo "[polisur-api] Iniciando servidor NestJS…"

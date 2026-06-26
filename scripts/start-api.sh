@@ -2,7 +2,7 @@
 # Arranque en Render (Node nativo): migraciones, almacén de evidencias y API.
 set -e
 
-EVIDENCE_DIR="${EVIDENCE_STORAGE_DIR:-/var/data/evidence}"
+EVIDENCE_DIR="${EVIDENCE_STORAGE_DIR:-/var/data/uploads/evidence}"
 mkdir -p "$EVIDENCE_DIR" 2>/dev/null || mkdir -p "./uploads/evidence"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

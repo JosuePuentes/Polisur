@@ -1,12 +1,18 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { fetchIncidents } from '@/lib/api/incidents';
 import { getSession } from '@/lib/auth';
-import { hasPermission, SITOP_PERMISSIONS } from '@/lib/permissions';
 import type { TacticalSocketIncident } from '@/lib/constants/tactical-socket';
 import { useTacticalSocket } from '@/lib/hooks/use-tactical-socket';
+import { hasPermission, SITOP_PERMISSIONS } from '@/lib/permissions';
 import type { Incident } from '@/lib/types/incident.types';
+import {
+  incidentToSocketPayload,
+  upsertIncident,
+  upsertIncidentFromSocket,
+} from '@/lib/utils/socket-incident-mapper';
 import { CreateIncidentPanel } from '@/components/dashboard/create-incident-panel';
 import { ExecutiveSummary } from '@/components/dashboard/executive-summary';
 import { IncidentList } from '@/components/dashboard/incident-list';
@@ -32,6 +38,7 @@ export default function DashboardPage() {
   const session = getSession();
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(
     null,
   );
@@ -41,24 +48,34 @@ export default function DashboardPage() {
     null,
   );
 
-  const handleSocketEvent = useCallback((payload: TacticalSocketIncident) => {
+  const loadIncidents = useCallback(async () => {
+    setListLoading(true);
+    setListError(null);
+
+    try {
+      const data = await fetchIncidents();
+      setIncidents(data);
+    } catch {
+      setListError('No fue posible cargar el registro de incidentes');
+    } finally {
+      setListLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadIncidents();
+  }, [loadIncidents, refreshKey]);
+
+  const injectLiveIncident = useCallback((payload: TacticalSocketIncident) => {
     setLiveAlert(payload);
-    setRefreshKey((key) => key + 1);
+    setIncidents((prev) => upsertIncidentFromSocket(prev, payload));
   }, []);
 
   useTacticalSocket({
     enabled: Boolean(session),
-    onIncidentCreated: handleSocketEvent,
-    onPanicAlert: handleSocketEvent,
+    onIncidentCreated: injectLiveIncident,
+    onPanicAlert: injectLiveIncident,
   });
-
-  const handleIncidentsChange = useCallback(
-    (data: Incident[], loading: boolean) => {
-      setIncidents(data);
-      setListLoading(loading);
-    },
-    [],
-  );
 
   const handleEvidenceUploaded = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -67,6 +84,11 @@ export default function DashboardPage() {
 
   const handleViewExpediente = useCallback((incident: Incident) => {
     setSelectedIncident(incident);
+  }, []);
+
+  const handleRadioDispatched = useCallback((incident: Incident) => {
+    setLiveAlert(incidentToSocketPayload(incident));
+    setIncidents((prev) => upsertIncident(prev, incident));
   }, []);
 
   if (!session) {
@@ -97,8 +119,10 @@ export default function DashboardPage() {
 
       <TacticalMap
         incidents={incidents}
-        loading={listLoading}
+        loading={listLoading && incidents.length === 0}
         onViewExpediente={handleViewExpediente}
+        canRadioDispatch={canCreateIncidents}
+        onRadioDispatched={handleRadioDispatched}
       />
 
       <div className="flex flex-wrap gap-2">
@@ -115,11 +139,12 @@ export default function DashboardPage() {
       </div>
 
       <IncidentList
-        key={refreshKey}
-        refreshKey={refreshKey}
+        incidents={incidents}
+        loading={listLoading}
+        error={listError}
         originFilter={originFilter}
         onSelect={setSelectedIncident}
-        onIncidentsChange={handleIncidentsChange}
+        onRetry={() => void loadIncidents()}
       />
 
       <IncidentModal

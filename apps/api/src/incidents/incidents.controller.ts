@@ -31,6 +31,7 @@ import { AuthenticatedOfficer } from '../common/interfaces/authenticated-officer
 import { resolveClientIp } from '../common/utils/client-ip.util';
 import { UploadEvidenceDto } from './dto/upload-evidence.dto';
 import { UpdateIncidentStatusDto } from './dto/update-incident-status.dto';
+import { CreateRadioDispatchDto } from './dto/create-radio-dispatch.dto';
 import { EvidenceUploadInterceptor } from './interceptors/evidence-upload.interceptor';
 import { IncidentsService } from './incidents.service';
 import {
@@ -62,6 +63,21 @@ export class IncidentsController {
     @GetUser() officer: AuthenticatedOfficer,
   ): Promise<IncidentWithRelations> {
     return this.incidentsService.create(createIncidentDto, officer);
+  }
+
+  @Post('radio-dispatch')
+  @RequirePermissions(SITOP_PERMISSIONS.INCIDENTS_CREATE)
+  @ApiOperation({
+    summary: 'Registrar incidente despachado por radio o central telefónica',
+    description:
+      'Crea un incidente en estatus EN_TRANSITO o DESPACHADO y emite alerta WebSocket al mapa operativo.',
+  })
+  @ApiResponse({ status: 201, description: 'Incidente de despacho registrado' })
+  createRadioDispatch(
+    @Body() dto: CreateRadioDispatchDto,
+    @GetUser() officer: AuthenticatedOfficer,
+  ): Promise<IncidentWithRelations> {
+    return this.incidentsService.createRadioDispatch(dto, officer);
   }
 
   @Get()

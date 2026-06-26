@@ -15,6 +15,7 @@ import {
   PatrolType,
   SITOP_PERMISSIONS,
 } from '@polisur/database';
+import { AuditController } from '../audit/decorators/audit-controller.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -24,6 +25,7 @@ import { OperationsService } from './operations.service';
 
 @ApiTags('Operaciones')
 @ApiBearerAuth('JWT')
+@AuditController()
 @Controller('operations')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class OperationsController {

@@ -25,7 +25,7 @@ services:
       - key: API_PUBLIC_URL
         sync: false
       - key: EVIDENCE_STORAGE_DIR
-        value: /var/data/evidence
+        value: /var/data/uploads/evidence
       - key: BOOTSTRAP_CEDULA
         sync: false
       - key: BOOTSTRAP_PASSWORD

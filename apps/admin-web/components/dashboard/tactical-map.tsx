@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import {
   CircleMarker,
   MapContainer,
   Marker,
+  Polygon,
   Popup,
   TileLayer,
   useMap,
@@ -18,15 +19,19 @@ import {
   DEFAULT_MAP_ZOOM,
   SAN_FRANCISCO_CENTER,
 } from '@/lib/constants/cuadrantes';
+import { PEACE_QUADRANT_ZONES } from '@/lib/constants/peace-quadrants-geo';
 import { resolveIncidentCoordinates } from '@/lib/utils/map-coordinates';
 import type { Incident } from '@/lib/types/incident.types';
 import { StatusBadge } from './status-badge';
+import { RadioDispatchModal } from './radio-dispatch-modal';
 
 interface TacticalMapProps {
   incidents: Incident[];
   loading?: boolean;
   onViewExpediente: (incident: Incident) => void;
   showHeatmapToggle?: boolean;
+  canRadioDispatch?: boolean;
+  onRadioDispatched?: (incident: Incident) => void;
 }
 
 function fixLeafletDefaultIcons(): void {
@@ -66,8 +71,18 @@ const transitPulseIcon = L.divIcon({
   popupAnchor: [0, -14],
 });
 
+const QUADRANT_POLYGON_STYLE = {
+  color: '#10b981',
+  weight: 2,
+  opacity: 0.75,
+  fillColor: '#22d3ee',
+  fillOpacity: 0.12,
+  dashArray: '6 4',
+} as const;
+
 function MapBounds({ incidents }: { incidents: Incident[] }) {
   const map = useMap();
+  const initialFitDone = useRef(false);
 
   useEffect(() => {
     if (incidents.length === 0) {
@@ -78,6 +93,11 @@ function MapBounds({ incidents }: { incidents: Incident[] }) {
       return;
     }
 
+    if (initialFitDone.current) {
+      return;
+    }
+
+    initialFitDone.current = true;
     const bounds = L.latLngBounds(
       incidents.map((incident, index) =>
         resolveIncidentCoordinates(incident, index),
@@ -94,10 +114,14 @@ export function TacticalMap({
   loading,
   onViewExpediente,
   showHeatmapToggle = true,
+  canRadioDispatch = false,
+  onRadioDispatched,
 }: TacticalMapProps) {
   useEffect(() => {
     fixLeafletDefaultIcons();
   }, []);
+
+  const [radioModalOpen, setRadioModalOpen] = useState(false);
 
   const [heatmapOn, setHeatmapOn] = useState(false);
   const [heatmap, setHeatmap] = useState<{
@@ -145,6 +169,10 @@ export function TacticalMap({
             </button>
           )}
           <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-sm border border-emerald-500/60 bg-cyan-500/20" />
+            Cuadrantes
+          </span>
+          <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
             En tránsito
           </span>
@@ -175,6 +203,29 @@ export function TacticalMap({
             url={DARK_MATTER_TILE_URL}
           />
           <MapBounds incidents={incidents} />
+
+          {PEACE_QUADRANT_ZONES.map((zone) => (
+            <Polygon
+              key={zone.id}
+              positions={zone.polygon}
+              pathOptions={QUADRANT_POLYGON_STYLE}
+            >
+              <Popup className="tactical-popup" closeButton>
+                <div className="min-w-[200px] space-y-2 rounded-lg border border-emerald-500/30 bg-slate-900 p-3 text-slate-100">
+                  <p className="font-mono text-[10px] uppercase tracking-wider text-emerald-400/90">
+                    Zona de Paz
+                  </p>
+                  <p className="text-sm font-semibold text-slate-100">
+                    Cuadrante de Paz N° {zone.number.toString().padStart(2, '0')}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    Unidad asignada:{' '}
+                    <span className="text-cyan-300">{zone.assignedUnit}</span>
+                  </p>
+                </div>
+              </Popup>
+            </Polygon>
+          ))}
 
           {heatmapOn && heatmap.patrols.map((p, i) => (
             p.latitude != null && p.longitude != null ? (
@@ -260,6 +311,10 @@ export function TacticalMap({
           width: auto !important;
         }
 
+        .leaflet-interactive:focus {
+          outline: none;
+        }
+
         .tactical-marker-transit {
           background: transparent;
           border: none;
@@ -306,6 +361,27 @@ export function TacticalMap({
           }
         }
       `}</style>
+
+      {canRadioDispatch && (
+        <>
+          <button
+            type="button"
+            onClick={() => setRadioModalOpen(true)}
+            className="absolute bottom-5 right-5 z-[500] flex max-w-[220px] items-center gap-2 rounded-full border border-amber-500/50 bg-gradient-to-r from-amber-700 to-amber-600 px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-white shadow-lg shadow-amber-900/40 transition hover:scale-[1.02] hover:from-amber-600 hover:to-amber-500"
+          >
+            <span aria-hidden className="text-base">📻</span>
+            Registrar Incidente Vía Radio / Central
+          </button>
+          <RadioDispatchModal
+            open={radioModalOpen}
+            onClose={() => setRadioModalOpen(false)}
+            onDispatched={(incident) => {
+              onRadioDispatched?.(incident);
+              setRadioModalOpen(false);
+            }}
+          />
+        </>
+      )}
     </section>
   );
 }

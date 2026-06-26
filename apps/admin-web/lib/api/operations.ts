@@ -67,7 +67,7 @@ export const opsApi = {
       status: string;
       checkInLatitude: number | null;
       checkInLongitude: number | null;
-      department: { name: string; code: string };
+      department: { id: string; name: string; code: string };
     } | null>(`/shifts/mine${fecha ? `?fecha=${fecha}` : ''}`),
   listInventory: (departmentId?: string, turno?: string) => {
     const params = new URLSearchParams();

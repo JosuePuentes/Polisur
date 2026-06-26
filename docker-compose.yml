@@ -45,12 +45,12 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
       NODE_OPTIONS: --max-old-space-size=512
       SHARP_CONCURRENCY: ${SHARP_CONCURRENCY:-3}
-      EVIDENCE_STORAGE_DIR: /var/data/evidence
+      EVIDENCE_STORAGE_DIR: /var/data/uploads/evidence
       API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:3001}
     ports:
       - '${API_PORT:-3001}:3001'
     volumes:
-      - polisur_evidence:/var/data/evidence
+      - polisur_evidence:/var/data/uploads/evidence
     networks:
       - polisur-net
     healthcheck:

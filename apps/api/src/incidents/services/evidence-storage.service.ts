@@ -20,8 +20,7 @@ export class EvidenceStorageService implements OnModuleInit {
   private readonly logger = new Logger(EvidenceStorageService.name);
 
   private readonly storageDir =
-    process.env.EVIDENCE_STORAGE_DIR ??
-    join(process.cwd(), 'uploads', 'evidence');
+    process.env.EVIDENCE_STORAGE_DIR ?? '/var/data/uploads/evidence';
 
   private readonly apiEvidenceBaseUrl =
     process.env.EVIDENCE_API_BASE_URL ??
@@ -47,7 +46,7 @@ export class EvidenceStorageService implements OnModuleInit {
       this.writable = false;
       this.logger.error(
         `El directorio de evidencias no es escribible: ${this.storageDir}. ` +
-          'En Render, monte un disco persistente en /var/data y configure EVIDENCE_STORAGE_DIR=/var/data/evidence',
+          'En Render, monte un disco persistente en /var/data y configure EVIDENCE_STORAGE_DIR=/var/data/uploads/evidence',
       );
     }
   }

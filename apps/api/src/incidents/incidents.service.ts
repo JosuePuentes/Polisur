@@ -18,6 +18,8 @@ import {
 
   EvidenceValidationService,
 
+  IncidentOrigin,
+
   IncidentStatus,
 
   Prisma,
@@ -45,9 +47,14 @@ import {
 
 } from './incidents.constants';
 
-import { OPERATIONAL_RESOURCE_FORBIDDEN_MESSAGE } from './incidents-access.constants';
+import {
+  IMMUTABLE_INCIDENT_MESSAGE,
+  OPERATIONAL_RESOURCE_FORBIDDEN_MESSAGE,
+} from './incidents-access.constants';
 
 import { UploadEvidenceDto } from './dto/upload-evidence.dto';
+import { CreateRadioDispatchDto } from './dto/create-radio-dispatch.dto';
+import { TacticalGateway } from '../realtime/tactical.gateway';
 
 import { EvidenceStorageService } from './services/evidence-storage.service';
 
@@ -90,6 +97,8 @@ export class IncidentsService {
     private readonly evidenceStorage: EvidenceStorageService,
 
     private readonly auditService: AuditService,
+
+    private readonly tacticalGateway: TacticalGateway,
 
   ) {}
 
@@ -198,6 +207,58 @@ export class IncidentsService {
 
     });
 
+  }
+
+  async createRadioDispatch(
+    dto: CreateRadioDispatchDto,
+    actor: AuthenticatedOfficer,
+  ): Promise<IncidentWithRelations> {
+    this.assertOfficerCanCreateIncident(actor, dto);
+
+    await this.evidenceValidation.assertSquadBelongsToDepartment(
+      dto.squadId,
+      dto.departmentId,
+    );
+
+    const code = await this.generateUniqueIncidentCode('RAD');
+    const initialStatus = dto.initialStatus ?? IncidentStatus.EN_TRANSITO;
+
+    const incident = await this.prisma.incident.create({
+      data: {
+        code,
+        tipoDelito: dto.tipoDelito,
+        parroquia: dto.parroquia,
+        cuadrante: dto.cuadrante,
+        descripcion: `[Despacho Radio/Central] ${dto.descripcion.trim()}`,
+        departmentId: dto.departmentId,
+        squadId: dto.squadId,
+        status: initialStatus,
+        origen: IncidentOrigin.INTERNO,
+      },
+      include: INCIDENT_DETAIL_INCLUDE,
+    });
+
+    this.tacticalGateway.broadcastIncidentCreated({
+      id: incident.id,
+      code: incident.code,
+      tipoDelito: incident.tipoDelito,
+      status: incident.status,
+      parroquia: incident.parroquia,
+      cuadrante: incident.cuadrante,
+      descripcion: incident.descripcion,
+      latitude: incident.latitude,
+      longitude: incident.longitude,
+      origen: incident.origen,
+      createdAt: incident.createdAt.toISOString(),
+      department: incident.department,
+      squad: {
+        id: incident.squad.id,
+        name: incident.squad.name,
+        callsign: incident.squad.callsign,
+      },
+    });
+
+    return incident;
   }
 
 
@@ -451,7 +512,7 @@ export class IncidentsService {
       throw new NotFoundException('Evidencia no encontrada');
     }
 
-    await this.assertOfficerCanMutateIncident(actor, record.incidentId);
+    await this.assertOfficerCanAccessIncident(actor, record.incidentId);
 
     const absolutePath = this.evidenceStorage.resolveAbsolutePath(filename);
 
@@ -541,90 +602,66 @@ export class IncidentsService {
 
 
 
-  private async assertOfficerCanMutateIncident(
+  private assertIncidentAllowsMutation(status: IncidentStatus): void {
+    if (
+      status === IncidentStatus.PROCESADO ||
+      status === IncidentStatus.CERRADO
+    ) {
+      throw new BadRequestException(IMMUTABLE_INCIDENT_MESSAGE);
+    }
+  }
 
+  private async assertOfficerCanAccessIncident(
     actor: AuthenticatedOfficer,
-
     incidentId: string,
-
   ): Promise<IncidentAccessScope> {
-
     const incident = await this.prisma.incident.findUnique({
-
       where: { id: incidentId },
-
       select: {
-
         id: true,
-
         code: true,
-
         status: true,
-
         departmentId: true,
-
         squadId: true,
-
       },
-
     });
 
-
-
     if (!incident) {
-
       throw new NotFoundException(`Incidente ${incidentId} no encontrado`);
-
     }
-
-
 
     if (actor.rangeRole === RangeRole.DISCENTE) {
-
       throw new ForbiddenException(OPERATIONAL_RESOURCE_FORBIDDEN_MESSAGE);
-
     }
-
-
 
     if (actor.rangeRole === RangeRole.SUPER_ADMIN) {
-
       return incident;
-
     }
-
-
 
     if (actor.rangeRole === RangeRole.JEFE_DEPARTAMENTO) {
-
       if (incident.departmentId !== actor.departmentId) {
-
         throw new ForbiddenException(OPERATIONAL_RESOURCE_FORBIDDEN_MESSAGE);
-
       }
-
       return incident;
-
     }
-
-
 
     if (actor.rangeRole === RangeRole.OFICIAL_ACTIVO) {
-
       if (!actor.squadId || incident.squadId !== actor.squadId) {
-
         throw new ForbiddenException(OPERATIONAL_RESOURCE_FORBIDDEN_MESSAGE);
-
       }
-
       return incident;
-
     }
 
-
-
     throw new ForbiddenException(OPERATIONAL_RESOURCE_FORBIDDEN_MESSAGE);
+  }
 
+  private async assertOfficerCanMutateIncident(
+    actor: AuthenticatedOfficer,
+    incidentId: string,
+  ): Promise<IncidentAccessScope> {
+    const incident = await this.assertOfficerCanAccessIncident(actor, incidentId);
+    this.assertIncidentAllowsMutation(incident.status);
+    return incident;
   }
 
 
@@ -695,7 +732,7 @@ export class IncidentsService {
 
 
 
-  private async generateUniqueIncidentCode(): Promise<string> {
+  private async generateUniqueIncidentCode(prefix = 'POL'): Promise<string> {
 
     for (let attempt = 0; attempt < 8; attempt += 1) {
 
@@ -703,7 +740,7 @@ export class IncidentsService {
 
       const suffix = randomBytes(2).toString('hex').toUpperCase();
 
-      const code = `POL-${date}-${suffix}`;
+      const code = `${prefix}-${date}-${suffix}`;
 
 
 

@@ -1,14 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { fetchIncidents } from '@/lib/api/incidents';
 import type { Incident } from '@/lib/types/incident.types';
 import { StatusBadge } from './status-badge';
 
 interface IncidentListProps {
+  incidents: Incident[];
+  loading: boolean;
+  error: string | null;
   onSelect: (incident: Incident) => void;
-  onIncidentsChange?: (incidents: Incident[], loading: boolean) => void;
-  refreshKey?: number;
+  onRetry: () => void;
   originFilter?: string;
 }
 
@@ -20,42 +20,19 @@ const ORIGIN_LABELS: Record<string, string> = {
 };
 
 export function IncidentList({
+  incidents,
+  loading,
+  error,
   onSelect,
-  onIncidentsChange,
-  refreshKey = 0,
+  onRetry,
   originFilter = 'ALL',
 }: IncidentListProps) {
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadIncidents = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    onIncidentsChange?.([], true);
-
-    try {
-      const data = await fetchIncidents();
-      setIncidents(data);
-      onIncidentsChange?.(data, false);
-    } catch {
-      setError('No fue posible cargar el registro de incidentes');
-      onIncidentsChange?.([], false);
-    } finally {
-      setLoading(false);
-    }
-  }, [onIncidentsChange]);
-
-  useEffect(() => {
-    void loadIncidents();
-  }, [loadIncidents, refreshKey]);
-
   const filteredIncidents = incidents.filter((incident) => {
     if (originFilter === 'ALL') return true;
     return (incident.origen ?? 'INTERNO') === originFilter;
   });
 
-  if (loading) {
+  if (loading && incidents.length === 0) {
     return (
       <div className="flex min-h-[280px] items-center justify-center rounded-xl border border-slate-800 bg-slate-900/30">
         <div className="text-center">
@@ -74,7 +51,7 @@ export function IncidentList({
         <p className="text-sm text-red-200">{error}</p>
         <button
           type="button"
-          onClick={() => void loadIncidents()}
+          onClick={onRetry}
           className="mt-4 rounded-lg border border-red-500/40 px-4 py-2 text-xs uppercase tracking-wider text-red-300 transition hover:bg-red-950/40"
         >
           Reintentar
@@ -158,5 +135,3 @@ export function IncidentList({
     </section>
   );
 }
-
-export { IncidentList as default };

@@ -20,6 +20,10 @@ import {
   assertPatrolCreateScope,
   resolveScopedDepartmentId,
 } from '../common/utils/operational-scope.util';
+import {
+  assertDetaineeAllowsMutation,
+  assertWeaponAssignmentAllowsMutation,
+} from '../common/utils/operational-immutability.util';
 
 @Injectable()
 export class OperationsService {
@@ -292,27 +296,33 @@ export class OperationsService {
     detaineeId: string,
     data: { fecha: string; tribunal: string; resultado?: string; observaciones?: string },
   ): Promise<unknown> {
-    return this.prisma.detaineeHearing.create({
-      data: {
-        detaineeId,
-        fecha: new Date(data.fecha),
-        tribunal: data.tribunal,
-        resultado: data.resultado,
-        observaciones: data.observaciones,
-      },
-    });
+    return this.assertDetaineeMutable(detaineeId).then(() =>
+      this.prisma.detaineeHearing.create({
+        data: {
+          detaineeId,
+          fecha: new Date(data.fecha),
+          tribunal: data.tribunal,
+          resultado: data.resultado,
+          observaciones: data.observaciones,
+        },
+      }),
+    );
   }
 
   addDetaineeRecord(
     detaineeId: string,
     data: { delito: string; observaciones?: string; officerId?: string; incidentId?: string },
   ): Promise<unknown> {
-    return this.prisma.detaineeRecord.create({
-      data: { detaineeId, ...data },
-    });
+    return this.assertDetaineeMutable(detaineeId).then(() =>
+      this.prisma.detaineeRecord.create({
+        data: { detaineeId, ...data },
+      }),
+    );
   }
 
-  updateDetaineeStatus(id: string, status: DetaineeStatus): Promise<unknown> {
+  async updateDetaineeStatus(id: string, status: DetaineeStatus): Promise<unknown> {
+    await this.assertDetaineeMutable(id);
+
     return this.prisma.detainee.update({
       where: { id },
       data: {
@@ -531,6 +541,11 @@ export class OperationsService {
   ): Promise<unknown> {
     const asset = await this.prisma.inventoryAsset.findUnique({ where: { id: assetId } });
     if (!asset) throw new NotFoundException('Activo no encontrado');
+    if (asset.assignedOfficerId) {
+      throw new BadRequestException(
+        'El activo ya tiene una entrega activa. Registre la devolución antes de una nueva asignación.',
+      );
+    }
     if (asset.departmentId) {
       assertDepartmentAccess(actor, asset.departmentId);
     }
@@ -551,6 +566,9 @@ export class OperationsService {
   async releaseInventoryAsset(assetId: string, actor: AuthenticatedOfficer): Promise<unknown> {
     const asset = await this.prisma.inventoryAsset.findUnique({ where: { id: assetId } });
     if (!asset) throw new NotFoundException('Activo no encontrado');
+    if (!asset.assignedOfficerId) {
+      throw new BadRequestException('El activo no tiene una entrega activa registrada.');
+    }
     if (asset.departmentId) {
       assertDepartmentAccess(actor, asset.departmentId);
     }
@@ -656,9 +674,10 @@ export class OperationsService {
       where: { id: assignmentId },
       include: { weapon: { select: { departmentId: true } } },
     });
-    if (!assignment || assignment.returnedAt) {
+    if (!assignment) {
       throw new NotFoundException('Asignación no encontrada');
     }
+    assertWeaponAssignmentAllowsMutation(assignment.returnedAt);
     if (assignment.weapon.departmentId) {
       assertDepartmentAccess(actor, assignment.weapon.departmentId);
     }
@@ -691,5 +710,16 @@ export class OperationsService {
         assignedByOfficer: { select: { nombres: true, apellidos: true } },
       },
     });
+  }
+
+  private async assertDetaineeMutable(detaineeId: string): Promise<void> {
+    const detainee = await this.prisma.detainee.findUnique({
+      where: { id: detaineeId },
+      select: { status: true },
+    });
+    if (!detainee) {
+      throw new NotFoundException('Detenido no encontrado');
+    }
+    assertDetaineeAllowsMutation(detainee.status);
   }
 }
