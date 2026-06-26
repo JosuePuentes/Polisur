@@ -17,33 +17,35 @@ async function bootstrap(): Promise<void> {
 
   app.setGlobalPrefix('api');
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('SITOP - Sistema de Inteligencia y Táctica Operativa Policial - API Core')
-    .setDescription(
-      'API institucional del Sistema de Inteligencia y Táctica Operativa Policial (SITOP). ' +
-        'Gestión táctica de incidentes, cadena de custodia fotográfica inmutable, ' +
-        'organigrama descentralizado y control de accesos jerárquico.',
-    )
-    .setVersion('1.0.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        description: 'Token JWT emitido por POST /api/auth/login',
-      },
-      'JWT',
-    )
-    .build();
+  if (process.env.NODE_ENV !== 'production') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('SITOP - Sistema de Inteligencia y Táctica Operativa Policial - API Core')
+      .setDescription(
+        'API institucional del Sistema de Inteligencia y Táctica Operativa Policial (SITOP). ' +
+          'Gestión táctica de incidentes, cadena de custodia fotográfica inmutable, ' +
+          'organigrama descentralizado y control de accesos jerárquico.',
+      )
+      .setVersion('1.0.0')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Token JWT emitido por POST /api/auth/login',
+        },
+        'JWT',
+      )
+      .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
-      tagsSorter: 'alpha',
-      operationsSorter: 'alpha',
-    },
-  });
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('docs', app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+        tagsSorter: 'alpha',
+        operationsSorter: 'alpha',
+      },
+    });
+  }
 
   app.enableCors({
     origin: (process.env.CORS_ORIGIN ?? 'http://localhost:3000')

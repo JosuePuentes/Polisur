@@ -1,9 +1,11 @@
 import path from 'path';
 import type { NextConfig } from 'next';
 
+const isVercel = Boolean(process.env.VERCEL);
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  output: 'standalone',
+  ...(!isVercel ? { output: 'standalone' as const } : {}),
   outputFileTracingRoot: path.join(__dirname, '../../'),
 };
 

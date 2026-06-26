@@ -15,6 +15,10 @@ import {
   TacticalIncidentPayload,
 } from './tactical.types';
 
+const GLOBAL_OPS_ROOM = 'global:ops';
+const deptRoom = (departmentId: string): string => `dept:${departmentId}`;
+const squadRoom = (squadId: string): string => `squad:${squadId}`;
+
 function resolveCorsOrigins(): string | string[] {
   const raw = process.env.CORS_ORIGIN ?? 'http://localhost:3000';
 
@@ -103,8 +107,19 @@ export class TacticalGateway implements OnGatewayConnection {
         return;
       }
 
+      await client.join(deptRoom(officer.departmentId));
+
+      if (officer.rangeRole === RangeRole.SUPER_ADMIN) {
+        await client.join(GLOBAL_OPS_ROOM);
+      }
+
+      if (officer.squadId) {
+        await client.join(squadRoom(officer.squadId));
+      }
+
       client.data.officerId = officer.id;
       client.data.rangeRole = officer.rangeRole;
+      client.data.departmentId = officer.departmentId;
       this.logger.debug(
         `Cliente táctico autenticado: ${officer.id} (${officer.rangeRole})`,
       );
@@ -116,18 +131,34 @@ export class TacticalGateway implements OnGatewayConnection {
     }
   }
 
+  private emitScoped(
+    event: string,
+    payload: TacticalIncidentPayload,
+    logMessage: string,
+  ): void {
+    const room = deptRoom(payload.department.id);
+    this.server.to(room).to(GLOBAL_OPS_ROOM).emit(event, payload);
+    this.logger.log(`${logMessage} → room ${room}`);
+  }
+
   broadcastIncidentCreated(payload: TacticalIncidentPayload): void {
-    this.server.emit(TACTICAL_EVENTS.INCIDENT_CREATED, payload);
-    this.logger.log(
-      `Broadcast incident:created → ${payload.code} (${payload.origen})`,
+    this.emitScoped(
+      TACTICAL_EVENTS.INCIDENT_CREATED,
+      payload,
+      `Broadcast incident:created ${payload.code} (${payload.origen})`,
     );
   }
 
   broadcastPanicAlert(payload: PanicAlertPayload): void {
-    this.server.emit(TACTICAL_EVENTS.PANIC_ALERT, payload);
-    this.server.emit(TACTICAL_EVENTS.INCIDENT_CREATED, payload);
-    this.logger.warn(
-      `Broadcast panic:alert → ${payload.code} @ ${payload.cuadrante}`,
+    this.emitScoped(
+      TACTICAL_EVENTS.PANIC_ALERT,
+      payload,
+      `Broadcast panic:alert ${payload.code} @ ${payload.cuadrante}`,
+    );
+    this.emitScoped(
+      TACTICAL_EVENTS.INCIDENT_CREATED,
+      payload,
+      `Broadcast incident:created (pánico) ${payload.code}`,
     );
   }
 }

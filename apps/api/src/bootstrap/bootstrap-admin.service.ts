@@ -31,11 +31,20 @@ export class BootstrapAdminService implements OnModuleInit {
     const existing = await this.prisma.officer.findUnique({ where: { cedula } });
 
     if (existing) {
+      const department = await this.prisma.department.findFirst({
+        where: { code: 'DECT' },
+      });
+
       await this.prisma.officer.update({
         where: { id: existing.id },
-        data: { passwordHash, isSuspended: false },
+        data: {
+          passwordHash,
+          rangeRole: RangeRole.SUPER_ADMIN,
+          isSuspended: false,
+          ...(department ? { departmentId: department.id } : {}),
+        },
       });
-      this.logger.log(`Bootstrap: credenciales actualizadas para cédula ${cedula}`);
+      this.logger.log(`Bootstrap: credenciales y rol SUPER_ADMIN actualizados para cédula ${cedula}`);
       return;
     }
 

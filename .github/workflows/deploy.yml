@@ -21,6 +21,24 @@ jobs:
     name: CI — Lint & Build
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: polisur
+          POSTGRES_PASSWORD: polisur_ci
+          POSTGRES_DB: polisur
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U polisur -d polisur"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://polisur:polisur_ci@localhost:5432/polisur?schema=public
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,6 +66,9 @@ jobs:
 
       - name: Install dependencies
         run: npm run ci:install
+
+      - name: Apply database migrations
+        run: npm run db:migrate:production --prefix packages/database
 
       - name: Build monorepo
         env:

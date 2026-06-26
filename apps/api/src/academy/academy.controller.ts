@@ -27,6 +27,7 @@ import {
 import { CreateDiscenteDto } from './dto/create-discente.dto';
 import { CreatePromocionDto } from './dto/create-promocion.dto';
 import { UpdatePromocionDto } from './dto/update-promocion.dto';
+import { AcademyAccessGuard } from './guards/academy-access.guard';
 
 @AuditController()
 @Controller('academy')
@@ -47,6 +48,7 @@ export class AcademyController {
   }
 
   @Post('promociones')
+  @UseGuards(AcademyAccessGuard)
   @RequirePermissions(SITOP_PERMISSIONS.ACADEMY_PROMOCIONES)
   createPromocion(
     @Body() dto: CreatePromocionDto,
@@ -55,6 +57,7 @@ export class AcademyController {
   }
 
   @Patch('promociones/:id')
+  @UseGuards(AcademyAccessGuard)
   @RequirePermissions(SITOP_PERMISSIONS.ACADEMY_PROMOCIONES)
   updatePromocion(
     @Param('id') id: string,
@@ -64,6 +67,7 @@ export class AcademyController {
   }
 
   @Post('discentes')
+  @UseGuards(AcademyAccessGuard)
   @RequirePermissions(SITOP_PERMISSIONS.ACADEMY_DISCENTES)
   registerDiscente(
     @Body() dto: CreateDiscenteDto,
@@ -72,6 +76,7 @@ export class AcademyController {
   }
 
   @Post('promociones/:id/graduar')
+  @UseGuards(AcademyAccessGuard)
   @RequirePermissions(SITOP_PERMISSIONS.ACADEMY_PROMOCIONES)
   graduatePromocion(
     @Param('id') id: string,

@@ -15,6 +15,11 @@ import {
 } from '@polisur/database';
 import { randomBytes } from 'node:crypto';
 import { AuthenticatedOfficer } from '../common/interfaces/authenticated-officer.interface';
+import {
+  assertDepartmentAccess,
+  assertPatrolCreateScope,
+  resolveScopedDepartmentId,
+} from '../common/utils/operational-scope.util';
 
 @Injectable()
 export class OperationsService {
@@ -22,9 +27,10 @@ export class OperationsService {
 
   // ─── COMANDOS ───────────────────────────────────────────────────────────────
 
-  listCommands(): Promise<unknown[]> {
+  listCommands(actor: AuthenticatedOfficer): Promise<unknown[]> {
+    const departmentId = resolveScopedDepartmentId(actor);
     return this.prisma.department.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...(departmentId ? { id: departmentId } : {}) },
       orderBy: { name: 'asc' },
       include: {
         commander: { select: { id: true, nombres: true, apellidos: true, cedula: true } },
@@ -45,18 +51,24 @@ export class OperationsService {
       longitude?: number;
       commanderId?: string | null;
     },
+    actor: AuthenticatedOfficer,
   ): Promise<unknown> {
+    assertDepartmentAccess(actor, id);
     return this.prisma.department.update({ where: { id }, data });
   }
 
-  createControlPoint(data: {
-    departmentId: string;
-    name: string;
-    address?: string;
-    latitude?: number;
-    longitude?: number;
-    pointType?: string;
-  }): Promise<unknown> {
+  createControlPoint(
+    data: {
+      departmentId: string;
+      name: string;
+      address?: string;
+      latitude?: number;
+      longitude?: number;
+      pointType?: string;
+    },
+    actor: AuthenticatedOfficer,
+  ): Promise<unknown> {
+    assertDepartmentAccess(actor, data.departmentId);
     return this.prisma.controlPoint.create({ data });
   }
 
@@ -81,9 +93,10 @@ export class OperationsService {
 
   // ─── PATRULLAJE / MINUTAS ───────────────────────────────────────────────────
 
-  listPatrols(departmentId?: string): Promise<unknown[]> {
+  listPatrols(actor: AuthenticatedOfficer, departmentId?: string): Promise<unknown[]> {
+    const scopedDept = resolveScopedDepartmentId(actor, departmentId);
     return this.prisma.patrolMinute.findMany({
-      where: departmentId ? { departmentId } : undefined,
+      where: scopedDept ? { departmentId: scopedDept } : undefined,
       orderBy: { createdAt: 'desc' },
       take: 100,
       include: {
@@ -118,6 +131,8 @@ export class OperationsService {
     if (!data.officerIds.length) {
       throw new BadRequestException('Debe incluir al menos un funcionario en la minuta');
     }
+
+    assertPatrolCreateScope(actor, data.departmentId, data.squadId);
 
     const code = `PAT-${new Date().getFullYear()}-${randomBytes(3).toString('hex').toUpperCase()}`;
 
@@ -155,25 +170,54 @@ export class OperationsService {
     });
   }
 
-  addRecoveredObject(
+  async addRecoveredObject(
     patrolMinuteId: string,
     data: { description: string; quantity?: number; unit?: string; photoUrl?: string },
+    actor: AuthenticatedOfficer,
   ): Promise<unknown> {
+    const patrol = await this.prisma.patrolMinute.findUnique({
+      where: { id: patrolMinuteId },
+      select: { departmentId: true },
+    });
+    if (!patrol) {
+      throw new NotFoundException('Minuta no encontrada');
+    }
+    assertDepartmentAccess(actor, patrol.departmentId);
     return this.prisma.recoveredObject.create({
       data: { patrolMinuteId, ...data, quantity: data.quantity ?? 1 },
     });
   }
 
-  async heatmapData(): Promise<{ patrols: unknown[]; incidents: unknown[] }> {
+  async heatmapData(actor: AuthenticatedOfficer): Promise<{ patrols: unknown[]; incidents: unknown[] }> {
+    const departmentId = resolveScopedDepartmentId(actor);
+    const patrolWhere = {
+      latitude: { not: null },
+      longitude: { not: null },
+      ...(departmentId ? { departmentId } : {}),
+    } as const;
+    const incidentWhere: {
+      latitude: { not: null };
+      longitude: { not: null };
+      departmentId?: string;
+      squadId?: string;
+    } = {
+      latitude: { not: null },
+      longitude: { not: null },
+      ...(departmentId ? { departmentId } : {}),
+    };
+    if (actor.rangeRole === RangeRole.OFICIAL_ACTIVO && actor.squadId) {
+      incidentWhere.squadId = actor.squadId;
+    }
+
     const [patrols, incidents] = await Promise.all([
       this.prisma.patrolMinute.findMany({
-        where: { latitude: { not: null }, longitude: { not: null } },
+        where: patrolWhere,
         select: { latitude: true, longitude: true, patrolType: true, createdAt: true },
         take: 500,
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.incident.findMany({
-        where: { latitude: { not: null }, longitude: { not: null } },
+        where: incidentWhere,
         select: { latitude: true, longitude: true, tipoDelito: true, createdAt: true },
         take: 500,
         orderBy: { createdAt: 'desc' },
@@ -282,14 +326,15 @@ export class OperationsService {
 
   // ─── GUARDIAS ───────────────────────────────────────────────────────────────
 
-  listShifts(fecha?: string, departmentId?: string): Promise<unknown[]> {
+  listShifts(actor: AuthenticatedOfficer, fecha?: string, departmentId?: string): Promise<unknown[]> {
+    const scopedDept = resolveScopedDepartmentId(actor, departmentId);
     const date = fecha ? new Date(fecha) : new Date();
     const dayStart = new Date(date.toISOString().slice(0, 10));
 
     return this.prisma.officerShift.findMany({
       where: {
         fecha: dayStart,
-        ...(departmentId ? { departmentId } : {}),
+        ...(scopedDept ? { departmentId: scopedDept } : {}),
       },
       include: {
         officer: {
@@ -308,13 +353,17 @@ export class OperationsService {
     });
   }
 
-  createShift(data: {
-    officerId: string;
-    departmentId: string;
-    fecha: string;
-    horaInicio: string;
-    horaFin: string;
-  }): Promise<unknown> {
+  createShift(
+    data: {
+      officerId: string;
+      departmentId: string;
+      fecha: string;
+      horaInicio: string;
+      horaFin: string;
+    },
+    actor: AuthenticatedOfficer,
+  ): Promise<unknown> {
+    assertDepartmentAccess(actor, data.departmentId);
     return this.prisma.officerShift.create({
       data: {
         ...data,
@@ -345,14 +394,15 @@ export class OperationsService {
     });
   }
 
-  async activeRoster(departmentId?: string): Promise<unknown[]> {
+  async activeRoster(actor: AuthenticatedOfficer, departmentId?: string): Promise<unknown[]> {
+    const scopedDept = resolveScopedDepartmentId(actor, departmentId);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const shifts = await this.prisma.officerShift.findMany({
       where: {
         fecha: today,
-        ...(departmentId ? { departmentId } : {}),
+        ...(scopedDept ? { departmentId: scopedDept } : {}),
       },
     });
 
@@ -360,7 +410,7 @@ export class OperationsService {
       where: {
         isSuspended: false,
         rangeRole: { in: [RangeRole.OFICIAL_ACTIVO, RangeRole.JEFE_DEPARTAMENTO] },
-        ...(departmentId ? { departmentId } : {}),
+        ...(scopedDept ? { departmentId: scopedDept } : {}),
       },
       select: {
         id: true,
@@ -392,10 +442,11 @@ export class OperationsService {
 
   // ─── LOGÍSTICA ──────────────────────────────────────────────────────────────
 
-  listInventory(departmentId?: string, turno?: string): Promise<unknown[]> {
+  listInventory(actor: AuthenticatedOfficer, departmentId?: string, turno?: string): Promise<unknown[]> {
+    const scopedDept = resolveScopedDepartmentId(actor, departmentId);
     return this.prisma.inventoryAsset.findMany({
       where: {
-        ...(departmentId ? { departmentId } : {}),
+        ...(scopedDept ? { departmentId: scopedDept } : {}),
         ...(turno ? { turno } : {}),
       },
       orderBy: { assetType: 'asc' },
@@ -408,7 +459,8 @@ export class OperationsService {
     });
   }
 
-  async inventoryByShift(departmentId: string, fecha?: string): Promise<unknown> {
+  async inventoryByShift(actor: AuthenticatedOfficer, departmentId: string, fecha?: string): Promise<unknown> {
+    assertDepartmentAccess(actor, departmentId);
     const day = fecha ? new Date(fecha) : new Date();
     day.setHours(0, 0, 0, 0);
 
@@ -445,32 +497,43 @@ export class OperationsService {
     return { fecha: day.toISOString().slice(0, 10), turnos: byTurno, unassigned: assets.filter((a) => !a.turno) };
   }
 
-  async inventorySummary(departmentId?: string): Promise<unknown[]> {
+  async inventorySummary(actor: AuthenticatedOfficer, departmentId?: string): Promise<unknown[]> {
+    const scopedDept = resolveScopedDepartmentId(actor, departmentId);
     const rows = await this.prisma.inventoryAsset.groupBy({
       by: ['assetType', 'status'],
-      where: departmentId ? { departmentId } : undefined,
+      where: scopedDept ? { departmentId: scopedDept } : undefined,
       _count: { id: true },
     });
     return rows;
   }
 
-  createAsset(data: {
-    code: string;
-    name: string;
-    assetType: AssetType;
-    serialNumber?: string;
-    departmentId?: string;
-    notas?: string;
-  }): Promise<unknown> {
+  createAsset(
+    data: {
+      code: string;
+      name: string;
+      assetType: AssetType;
+      serialNumber?: string;
+      departmentId?: string;
+      notas?: string;
+    },
+    actor: AuthenticatedOfficer,
+  ): Promise<unknown> {
+    if (data.departmentId) {
+      assertDepartmentAccess(actor, data.departmentId);
+    }
     return this.prisma.inventoryAsset.create({ data });
   }
 
   async assignInventoryAsset(
     assetId: string,
     data: { officerId: string; turno: string },
+    actor: AuthenticatedOfficer,
   ): Promise<unknown> {
     const asset = await this.prisma.inventoryAsset.findUnique({ where: { id: assetId } });
     if (!asset) throw new NotFoundException('Activo no encontrado');
+    if (asset.departmentId) {
+      assertDepartmentAccess(actor, asset.departmentId);
+    }
 
     return this.prisma.inventoryAsset.update({
       where: { id: assetId },
@@ -485,9 +548,12 @@ export class OperationsService {
     });
   }
 
-  async releaseInventoryAsset(assetId: string): Promise<unknown> {
+  async releaseInventoryAsset(assetId: string, actor: AuthenticatedOfficer): Promise<unknown> {
     const asset = await this.prisma.inventoryAsset.findUnique({ where: { id: assetId } });
     if (!asset) throw new NotFoundException('Activo no encontrado');
+    if (asset.departmentId) {
+      assertDepartmentAccess(actor, asset.departmentId);
+    }
 
     return this.prisma.inventoryAsset.update({
       where: { id: assetId },
@@ -514,9 +580,10 @@ export class OperationsService {
 
   // ─── PARQUE DE ARMAS ───────────────────────────────────────────────────────
 
-  listWeapons(departmentId?: string): Promise<unknown[]> {
+  listWeapons(actor: AuthenticatedOfficer, departmentId?: string): Promise<unknown[]> {
+    const scopedDept = resolveScopedDepartmentId(actor, departmentId);
     return this.prisma.weapon.findMany({
-      where: departmentId ? { departmentId } : undefined,
+      where: scopedDept ? { departmentId: scopedDept } : undefined,
       orderBy: { serialNumber: 'asc' },
       include: {
         department: { select: { name: true } },
@@ -531,13 +598,19 @@ export class OperationsService {
     });
   }
 
-  createWeapon(data: {
-    serialNumber: string;
-    tipo: string;
-    marca?: string;
-    modelo?: string;
-    departmentId?: string;
-  }): Promise<unknown> {
+  createWeapon(
+    data: {
+      serialNumber: string;
+      tipo: string;
+      marca?: string;
+      modelo?: string;
+      departmentId?: string;
+    },
+    actor: AuthenticatedOfficer,
+  ): Promise<unknown> {
+    if (data.departmentId) {
+      assertDepartmentAccess(actor, data.departmentId);
+    }
     return this.prisma.weapon.create({
       data: { ...data, status: WeaponStatus.DISPONIBLE },
     });
@@ -550,6 +623,9 @@ export class OperationsService {
   ): Promise<unknown> {
     const weapon = await this.prisma.weapon.findUnique({ where: { id: weaponId } });
     if (!weapon) throw new NotFoundException('Arma no encontrada');
+    if (weapon.departmentId) {
+      assertDepartmentAccess(actor, weapon.departmentId);
+    }
 
     const active = await this.prisma.weaponAssignment.findFirst({
       where: { weaponId, returnedAt: null },
@@ -575,12 +651,16 @@ export class OperationsService {
     return assignment;
   }
 
-  async returnWeapon(assignmentId: string): Promise<{ ok: boolean }> {
+  async returnWeapon(assignmentId: string, actor: AuthenticatedOfficer): Promise<{ ok: boolean }> {
     const assignment = await this.prisma.weaponAssignment.findUnique({
       where: { id: assignmentId },
+      include: { weapon: { select: { departmentId: true } } },
     });
     if (!assignment || assignment.returnedAt) {
       throw new NotFoundException('Asignación no encontrada');
+    }
+    if (assignment.weapon.departmentId) {
+      assertDepartmentAccess(actor, assignment.weapon.departmentId);
     }
 
     await this.prisma.$transaction([
@@ -597,7 +677,12 @@ export class OperationsService {
     return { ok: true };
   }
 
-  weaponAssignmentHistory(weaponId: string): Promise<unknown[]> {
+  async weaponAssignmentHistory(weaponId: string, actor: AuthenticatedOfficer): Promise<unknown[]> {
+    const weapon = await this.prisma.weapon.findUnique({ where: { id: weaponId } });
+    if (!weapon) throw new NotFoundException('Arma no encontrada');
+    if (weapon.departmentId) {
+      assertDepartmentAccess(actor, weapon.departmentId);
+    }
     return this.prisma.weaponAssignment.findMany({
       where: { weaponId },
       orderBy: { assignedAt: 'desc' },

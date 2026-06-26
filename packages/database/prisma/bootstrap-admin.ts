@@ -5,10 +5,17 @@ const prisma = new PrismaClient();
 const BCRYPT_ROUNDS = 12;
 
 async function main(): Promise<void> {
-  const cedula = (process.env.BOOTSTRAP_CEDULA ?? '24241240').trim();
-  const password = process.env.BOOTSTRAP_PASSWORD ?? 'Puentes1';
-  const nombres = process.env.BOOTSTRAP_NOMBRES ?? 'Josue';
-  const apellidos = process.env.BOOTSTRAP_APELLIDOS ?? 'Puentes';
+  const cedula = process.env.BOOTSTRAP_CEDULA?.trim();
+  const password = process.env.BOOTSTRAP_PASSWORD;
+
+  if (!cedula || !password) {
+    throw new Error(
+      'Defina BOOTSTRAP_CEDULA y BOOTSTRAP_PASSWORD en el entorno antes de ejecutar el bootstrap.',
+    );
+  }
+
+  const nombres = process.env.BOOTSTRAP_NOMBRES ?? 'Administrador';
+  const apellidos = process.env.BOOTSTRAP_APELLIDOS ?? 'SITOP';
   const credentialNumber =
     process.env.BOOTSTRAP_CREDENTIAL ?? `POL-ADM-${cedula.replace(/\D/g, '').slice(-8)}`;
 

@@ -99,6 +99,16 @@ export function LoginForm() {
           className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-cyan-400/10 to-transparent transition group-hover:translate-x-full duration-700"
         />
       </button>
+
+      <p className="text-center text-xs text-slate-500">
+        ¿Eres ciudadano?{' '}
+        <a
+          href="/public/denuncias"
+          className="text-cyan-400/90 underline-offset-2 transition hover:text-cyan-300 hover:underline"
+        >
+          Portal de denuncias anónimas
+        </a>
+      </p>
     </form>
   );
 }
