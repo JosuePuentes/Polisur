@@ -88,6 +88,15 @@ export class RrhhController {
     return this.rrhhService.setCredentials(id, dto);
   }
 
+  @Patch('officers/:id/transfer')
+  @RequirePermissions(SITOP_PERMISSIONS.RRHH_MANAGE)
+  transferOfficer(
+    @Param('id') id: string,
+    @Body() body: { departmentId: string; squadId?: string | null },
+  ): Promise<OfficerListItem> {
+    return this.rrhhService.transferOfficer(id, body);
+  }
+
   @Patch('officers/:id/permissions')
   @RequirePermissions(SITOP_PERMISSIONS.RRHH_MANAGE)
   updatePermissions(

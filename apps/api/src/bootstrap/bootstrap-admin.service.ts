@@ -76,38 +76,38 @@ export class BootstrapAdminService implements OnModuleInit {
     this.logger.log(`Usuario inicial creado (SUPER_ADMIN): cédula ${cedula}`);
   }
 
-  private async ensureOrganizationalStructure(): Promise<void> {
+  async ensureOrganizationalStructure(): Promise<void> {
     const departmentCount = await this.prisma.department.count();
     if (departmentCount > 0) {
       return;
     }
 
-    const dect = await this.prisma.department.create({
-      data: {
-        code: 'DECT',
-        name: 'Dirección de Estrategia y Control Táctico',
-        description: 'Academia / Mando General municipal',
-      },
-    });
+    const seeds = [
+      { code: 'DECT', name: 'Dirección de Estrategia y Control Táctico', description: 'Academia / Mando General' },
+      { code: 'DIAN', name: 'Dirección de Inteligencia y Antidrogas', description: 'Inteligencia e intervención' },
+      { code: 'DIVINV', name: 'División de Investigaciones', description: 'Investigaciones penales' },
+      { code: 'CANINOS', name: 'Unidad Canina', description: 'Unidad K9' },
+      { code: 'VGEN', name: 'Violencia de Género', description: 'Atención a víctimas' },
+      { code: 'MOTORIZ', name: 'Motorizados', description: 'Patrullaje motorizado' },
+      { code: 'PINTEL', name: 'Patrullaje de Inteligencia', description: 'Inteligencia en calle' },
+      { code: 'ACOPIO', name: 'Centro de Acopio Polisur', description: 'Sede central de acopio' },
+    ];
 
-    const dian = await this.prisma.department.create({
-      data: {
-        code: 'DIAN',
-        name: 'Dirección de Inteligencia y Antidrogas',
-        description: 'Comando de inteligencia e intervención antidrogas',
-      },
-    });
+    for (const seed of seeds) {
+      await this.prisma.department.create({ data: seed });
+    }
 
-    await this.prisma.squad.create({
-      data: {
-        name: 'Escuadra Táctica de Intervención A',
-        callsign: 'ETA-ALPHA',
-        departmentId: dian.id,
-      },
-    });
+    const dian = await this.prisma.department.findFirst({ where: { code: 'DIAN' } });
+    if (dian) {
+      await this.prisma.squad.create({
+        data: {
+          name: 'Escuadra Táctica de Intervención A',
+          callsign: 'ETA-ALPHA',
+          departmentId: dian.id,
+        },
+      });
+    }
 
-    this.logger.log(
-      `Estructura organizacional inicial creada (DECT, DIAN, escuadra ${dect.code}/${dian.code})`,
-    );
+    this.logger.log('Estructura organizacional inicial creada (8 comandos + escuadra)');
   }
 }

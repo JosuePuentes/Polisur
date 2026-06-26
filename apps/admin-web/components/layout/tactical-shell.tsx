@@ -6,26 +6,17 @@ import { clearAuthSession, getSession } from '@/lib/auth';
 import { hasPermission, SITOP_PERMISSIONS } from '@/lib/permissions';
 
 const NAV_ITEMS = [
-  {
-    href: '/dashboard',
-    label: 'Centro de Mando',
-    permission: SITOP_PERMISSIONS.DASHBOARD_VIEW,
-  },
-  {
-    href: '/dashboard/academia',
-    label: 'SITOP Academia',
-    permission: SITOP_PERMISSIONS.ACADEMY_VIEW,
-  },
-  {
-    href: '/dashboard/rrhh',
-    label: 'RRHH',
-    permission: SITOP_PERMISSIONS.RRHH_VIEW,
-  },
-  {
-    href: '/public/denuncias',
-    label: 'Portal Ciudadano',
-    external: true,
-  },
+  { href: '/dashboard', label: 'Centro de Mando', permission: SITOP_PERMISSIONS.DASHBOARD_VIEW },
+  { href: '/dashboard/patrullaje', label: 'Patrullaje / Minutas', permission: SITOP_PERMISSIONS.PATROL_VIEW },
+  { href: '/dashboard/detenidos', label: 'Detenidos', permission: SITOP_PERMISSIONS.DETAINEES_VIEW },
+  { href: '/dashboard/guardias', label: 'Guardias Activas', permission: SITOP_PERMISSIONS.SHIFTS_VIEW },
+  { href: '/dashboard/comandos', label: 'Comandos', permission: SITOP_PERMISSIONS.COMMANDS_VIEW },
+  { href: '/dashboard/cuadrantes', label: 'Cuadrantes de Paz', permission: SITOP_PERMISSIONS.QUADRANTS_VIEW },
+  { href: '/dashboard/logistica', label: 'Logística', permission: SITOP_PERMISSIONS.LOGISTICS_VIEW },
+  { href: '/dashboard/parque-armas', label: 'Parque de Armas', permission: SITOP_PERMISSIONS.ARMORY_VIEW },
+  { href: '/dashboard/academia', label: 'SITOP Academia', permission: SITOP_PERMISSIONS.ACADEMY_VIEW },
+  { href: '/dashboard/rrhh', label: 'RRHH', permission: SITOP_PERMISSIONS.RRHH_VIEW },
+  { href: '/public/denuncias', label: 'Portal Ciudadano', external: true },
 ];
 
 export function TacticalShell({ children }: { children: React.ReactNode }) {
@@ -50,36 +41,14 @@ export function TacticalShell({ children }: { children: React.ReactNode }) {
           <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-500/70">SITOP</p>
           <h2 className="mt-1 text-sm font-semibold text-slate-200">Polisur · SITOP</h2>
         </div>
-
-        <nav className="flex-1 space-y-1 p-3">
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {visibleNav.map((item) => {
-            const active =
-              !item.external &&
-              (pathname === item.href ||
-                (item.href !== '/dashboard' && pathname.startsWith(item.href)));
-
-            const className = `block rounded-lg px-3 py-2.5 text-sm transition ${
-              active
-                ? 'border border-cyan-500/30 bg-cyan-950/30 text-cyan-300'
-                : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
-            }`;
-
-            if (item.external) {
-              return (
-                <Link key={item.href} href={item.href} target="_blank" className={className}>
-                  {item.label}
-                </Link>
-              );
-            }
-
-            return (
-              <Link key={item.href} href={item.href} className={className}>
-                {item.label}
-              </Link>
-            );
+            const active = !item.external && (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href)));
+            const className = `block rounded-lg px-3 py-2.5 text-sm transition ${active ? 'border border-cyan-500/30 bg-cyan-950/30 text-cyan-300' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`;
+            if (item.external) return <Link key={item.href} href={item.href} target="_blank" className={className}>{item.label}</Link>;
+            return <Link key={item.href} href={item.href} className={className}>{item.label}</Link>;
           })}
         </nav>
-
         <div className="border-t border-slate-800 p-4">
           {session && (
             <div className="mb-3 rounded-lg bg-slate-950/60 px-3 py-2">
@@ -87,28 +56,16 @@ export function TacticalShell({ children }: { children: React.ReactNode }) {
               <p className="truncate text-xs text-cyan-400/90">{session.rangeRole.replace(/_/g, ' ')}</p>
             </div>
           )}
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="w-full rounded-lg border border-slate-700 px-3 py-2 text-xs uppercase tracking-wider text-slate-400 transition hover:border-red-500/40 hover:bg-red-950/20 hover:text-red-300"
-          >
-            Cerrar sesión
-          </button>
+          <button type="button" onClick={handleLogout} className="w-full rounded-lg border border-slate-700 px-3 py-2 text-xs uppercase tracking-wider text-slate-400 hover:border-red-500/40 hover:bg-red-950/20 hover:text-red-300">Cerrar sesión</button>
         </div>
       </aside>
-
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-slate-800 bg-slate-900/30 px-4 py-3 backdrop-blur-sm lg:px-8">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-widest text-slate-500">Panel Administrativo Centralizado</p>
-            <h1 className="text-base font-semibold text-slate-100">Centro de Mando Operativo</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)] sm:inline-block" />
-            <span className="font-mono text-xs text-slate-500">EN LÍNEA</span>
+            <h1 className="text-base font-semibold text-slate-100">Sistema SITOP</h1>
           </div>
         </header>
-
         <main className="relative flex-1 overflow-auto p-4 lg:p-8">
           <div aria-hidden className="pointer-events-none absolute inset-0 tactical-grid opacity-30" />
           <div className="relative z-10">{children}</div>

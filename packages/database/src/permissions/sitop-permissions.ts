@@ -12,6 +12,20 @@ export const SITOP_PERMISSIONS = {
   RRHH_VIEW: 'rrhh.view',
   RRHH_MANAGE: 'rrhh.manage',
   RRHH_CREDENTIALS: 'rrhh.credentials',
+  COMMANDS_VIEW: 'commands.view',
+  COMMANDS_MANAGE: 'commands.manage',
+  QUADRANTS_VIEW: 'quadrants.view',
+  QUADRANTS_MANAGE: 'quadrants.manage',
+  PATROL_VIEW: 'patrol.view',
+  PATROL_MANAGE: 'patrol.manage',
+  DETAINEES_VIEW: 'detainees.view',
+  DETAINEES_MANAGE: 'detainees.manage',
+  SHIFTS_VIEW: 'shifts.view',
+  SHIFTS_MANAGE: 'shifts.manage',
+  LOGISTICS_VIEW: 'logistics.view',
+  LOGISTICS_MANAGE: 'logistics.manage',
+  ARMORY_VIEW: 'armory.view',
+  ARMORY_MANAGE: 'armory.manage',
 } as const;
 
 export type SitopPermission =
@@ -33,6 +47,20 @@ export const SITOP_PERMISSION_LABELS: Record<SitopPermission, string> = {
   [SITOP_PERMISSIONS.RRHH_VIEW]: 'Consultar funcionarios',
   [SITOP_PERMISSIONS.RRHH_MANAGE]: 'Registrar y editar funcionarios',
   [SITOP_PERMISSIONS.RRHH_CREDENTIALS]: 'Asignar claves de acceso',
+  [SITOP_PERMISSIONS.COMMANDS_VIEW]: 'Ver comandos y divisiones',
+  [SITOP_PERMISSIONS.COMMANDS_MANAGE]: 'Gestionar comandos y puntos de control',
+  [SITOP_PERMISSIONS.QUADRANTS_VIEW]: 'Ver cuadrantes de paz',
+  [SITOP_PERMISSIONS.QUADRANTS_MANAGE]: 'Gestionar cuadrantes de paz',
+  [SITOP_PERMISSIONS.PATROL_VIEW]: 'Ver patrullajes y minutas',
+  [SITOP_PERMISSIONS.PATROL_MANAGE]: 'Registrar patrullajes y objetos recuperados',
+  [SITOP_PERMISSIONS.DETAINEES_VIEW]: 'Ver detenidos y calabozos',
+  [SITOP_PERMISSIONS.DETAINEES_MANAGE]: 'Registrar detenidos y audiencias',
+  [SITOP_PERMISSIONS.SHIFTS_VIEW]: 'Ver guardias y funcionarios activos',
+  [SITOP_PERMISSIONS.SHIFTS_MANAGE]: 'Programar guardias y marcar llegada',
+  [SITOP_PERMISSIONS.LOGISTICS_VIEW]: 'Ver logística e inventario',
+  [SITOP_PERMISSIONS.LOGISTICS_MANAGE]: 'Gestionar patrullas, motos y equipos',
+  [SITOP_PERMISSIONS.ARMORY_VIEW]: 'Ver parque de armas',
+  [SITOP_PERMISSIONS.ARMORY_MANAGE]: 'Asignar y registrar armas',
 };
 
 const JEFE_PERMISSIONS: SitopPermission[] = [
@@ -47,6 +75,18 @@ const JEFE_PERMISSIONS: SitopPermission[] = [
   SITOP_PERMISSIONS.RRHH_VIEW,
   SITOP_PERMISSIONS.RRHH_MANAGE,
   SITOP_PERMISSIONS.RRHH_CREDENTIALS,
+  SITOP_PERMISSIONS.COMMANDS_VIEW,
+  SITOP_PERMISSIONS.COMMANDS_MANAGE,
+  SITOP_PERMISSIONS.QUADRANTS_VIEW,
+  SITOP_PERMISSIONS.PATROL_VIEW,
+  SITOP_PERMISSIONS.PATROL_MANAGE,
+  SITOP_PERMISSIONS.DETAINEES_VIEW,
+  SITOP_PERMISSIONS.DETAINEES_MANAGE,
+  SITOP_PERMISSIONS.SHIFTS_VIEW,
+  SITOP_PERMISSIONS.SHIFTS_MANAGE,
+  SITOP_PERMISSIONS.LOGISTICS_VIEW,
+  SITOP_PERMISSIONS.ARMORY_VIEW,
+  SITOP_PERMISSIONS.ARMORY_MANAGE,
 ];
 
 const OFICIAL_PERMISSIONS: SitopPermission[] = [
@@ -55,6 +95,10 @@ const OFICIAL_PERMISSIONS: SitopPermission[] = [
   SITOP_PERMISSIONS.INCIDENTS_CREATE,
   SITOP_PERMISSIONS.INCIDENTS_STATUS,
   SITOP_PERMISSIONS.INCIDENTS_EVIDENCE,
+  SITOP_PERMISSIONS.PATROL_VIEW,
+  SITOP_PERMISSIONS.PATROL_MANAGE,
+  SITOP_PERMISSIONS.DETAINEES_VIEW,
+  SITOP_PERMISSIONS.SHIFTS_VIEW,
 ];
 
 export const ROLE_DEFAULT_PERMISSIONS: Record<RangeRole, SitopPermission[]> = {

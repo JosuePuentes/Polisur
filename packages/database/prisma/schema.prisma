@@ -52,6 +52,46 @@ enum AuditSeverity {
   CRITICAL
 }
 
+enum ShiftStatus {
+  OFF_DUTY
+  ON_DUTY_PENDING
+  ON_DUTY_ACTIVE
+}
+
+enum AssetType {
+  PATRULLA
+  MOTO
+  EQUIPO
+  RADIO
+  OTRO
+}
+
+enum AssetStatus {
+  OPERATIVO
+  MANTENIMIENTO
+  BAJA
+}
+
+enum WeaponStatus {
+  DISPONIBLE
+  ASIGNADA
+  MANTENIMIENTO
+  BAJA
+}
+
+enum DetaineeStatus {
+  EN_CALABOZO
+  AUDIENCIA
+  TRASLADADO_FISCALIA
+  LIBERADO
+}
+
+enum PatrolType {
+  PATRULLAJE
+  MINUTA
+  PROCEDIMIENTO_MIXTO
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ORGANIGRAMA
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,13 +102,24 @@ model Department {
   code        String   @unique @db.VarChar(32)
   name        String   @db.VarChar(120)
   description String?  @db.Text
+  address     String?  @db.VarChar(200)
+  latitude    Float?
+  longitude   Float?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  squads    Squad[]
-  officers  Officer[]
-  incidents Incident[]
+  commanderId String?
+  commander   Officer? @relation("DepartmentCommander", fields: [commanderId], references: [id], onDelete: SetNull)
+
+  squads           Squad[]
+  officers         Officer[]         @relation("OfficerDepartment")
+  incidents        Incident[]
+  controlPoints    ControlPoint[]
+  patrolMinutes    PatrolMinute[]
+  inventoryAssets  InventoryAsset[]
+  weapons          Weapon[]
+  officerShifts    OfficerShift[]
 
   @@index([isActive], map: "idx_department_active_btree")
   @@index([name], map: "idx_department_name_btree")
@@ -91,8 +142,9 @@ model Squad {
   leaderId String?  @unique
   leader   Officer? @relation("SquadLeader", fields: [leaderId], references: [id], onDelete: SetNull)
 
-  members   Officer[]  @relation("SquadMembers")
-  incidents Incident[]
+  members       Officer[]      @relation("SquadMembers")
+  incidents     Incident[]
+  patrolMinutes PatrolMinute[]
 
   @@index([departmentId], map: "idx_squad_department_btree")
   @@index([isActive], map: "idx_squad_active_btree")
@@ -123,7 +175,9 @@ model Officer {
 
   /// Asignación macro por RRHH
   departmentId String
-  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  department   Department @relation("OfficerDepartment", fields: [departmentId], references: [id], onDelete: Restrict)
+
+  commandedDepartments Department[] @relation("DepartmentCommander")
 
   /// Asignación táctica local por jefe de comando (miembro de escuadra)
   squadId String?
@@ -144,7 +198,13 @@ model Officer {
   @@index([isSuspended], map: "idx_officer_suspended_btree")
   @@index([apellidos, nombres], map: "idx_officer_name_btree")
 
-  auditLogs AuditLog[]
+  auditLogs            AuditLog[]
+  patrolParticipations PatrolMinuteOfficer[]
+  createdPatrols       PatrolMinute[]        @relation("PatrolCreator")
+  shifts               OfficerShift[]
+  weaponAssignments    WeaponAssignment[]    @relation("WeaponAssignee")
+  assignedWeapons      WeaponAssignment[]    @relation("WeaponAssigner")
+  detaineeRecords      DetaineeRecord[]
 
   @@map("officers")
 }
@@ -262,4 +322,264 @@ model AuditLog {
   @@index([severity], map: "idx_audit_severity_btree")
   @@index([success], map: "idx_audit_success_btree")
   @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMANDOS, CUADRANTES Y PUNTOS DE CONTROL
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ControlPoint {
+  id           String   @id @default(cuid())
+  name         String   @db.VarChar(120)
+  address      String?  @db.VarChar(200)
+  latitude     Float?
+  longitude    Float?
+  pointType    String   @default("PUESTO") @db.VarChar(40)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@index([departmentId], map: "idx_control_point_dept_btree")
+  @@map("control_points")
+}
+
+model PeaceQuadrant {
+  id           String   @id @default(cuid())
+  code         String   @unique @db.VarChar(24)
+  name         String   @db.VarChar(80)
+  parroquia    String   @db.VarChar(80)
+  centerLat    Float?
+  centerLng    Float?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([parroquia], map: "idx_peace_quadrant_parroquia_btree")
+  @@map("peace_quadrants")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATRULLAJE, MINUTAS Y OBJETOS RECUPERADOS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PatrolMinute {
+  id           String     @id @default(cuid())
+  code         String     @unique @db.VarChar(24)
+  patrolType   PatrolType @default(MINUTA)
+  parroquia    String     @db.VarChar(80)
+  cuadrante    String     @db.VarChar(40)
+  descripcion  String     @db.Text
+  latitude     Float?
+  longitude    Float?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  squadId String?
+  squad   Squad?  @relation(fields: [squadId], references: [id], onDelete: SetNull)
+
+  createdByOfficerId String
+  createdByOfficer   Officer @relation("PatrolCreator", fields: [createdByOfficerId], references: [id], onDelete: Restrict)
+
+  incidentId String? @unique
+
+  officers         PatrolMinuteOfficer[]
+  recoveredObjects RecoveredObject[]
+
+  @@index([departmentId], map: "idx_patrol_dept_btree")
+  @@index([createdAt], map: "idx_patrol_created_btree")
+  @@map("patrol_minutes")
+}
+
+model PatrolMinuteOfficer {
+  id             String  @id @default(cuid())
+  isSquadLeader   Boolean @default(false)
+  externalSquad  Boolean @default(false)
+
+  patrolMinuteId String
+  patrolMinute   PatrolMinute @relation(fields: [patrolMinuteId], references: [id], onDelete: Cascade)
+
+  officerId String
+  officer   Officer @relation(fields: [officerId], references: [id], onDelete: Restrict)
+
+  departmentId String @db.VarChar(64)
+  squadId      String? @db.VarChar(64)
+
+  @@unique([patrolMinuteId, officerId], map: "uq_patrol_officer")
+  @@index([officerId], map: "idx_patrol_officer_officer_btree")
+  @@map("patrol_minute_officers")
+}
+
+model RecoveredObject {
+  id          String   @id @default(cuid())
+  description String   @db.VarChar(300)
+  quantity    Int      @default(1)
+  unit        String?  @db.VarChar(40)
+  photoUrl    String?  @db.VarChar(2048)
+  registeredAt DateTime @default(now())
+
+  patrolMinuteId String?
+  patrolMinute   PatrolMinute? @relation(fields: [patrolMinuteId], references: [id], onDelete: SetNull)
+
+  incidentId String?
+
+  @@index([patrolMinuteId], map: "idx_recovered_patrol_btree")
+  @@map("recovered_objects")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DETENIDOS Y CALABOZOS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Detainee {
+  id         String         @id @default(cuid())
+  cedula     String?        @db.VarChar(20)
+  nombres    String         @db.VarChar(80)
+  apellidos  String         @db.VarChar(80)
+  alias      String?        @db.VarChar(80)
+  cellNumber String?        @db.VarChar(20)
+  status     DetaineeStatus @default(EN_CALABOZO)
+  ingresoAt  DateTime       @default(now())
+  egresoAt   DateTime?
+  notas      String?        @db.Text
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  hearings DetaineeHearing[]
+  records  DetaineeRecord[]
+
+  @@index([cedula], map: "idx_detainee_cedula_btree")
+  @@index([status], map: "idx_detainee_status_btree")
+  @@map("detainees")
+}
+
+model DetaineeHearing {
+  id            String   @id @default(cuid())
+  fecha         DateTime
+  tribunal      String   @db.VarChar(120)
+  resultado     String?  @db.VarChar(200)
+  observaciones String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  detaineeId String
+  detainee   Detainee @relation(fields: [detaineeId], references: [id], onDelete: Cascade)
+
+  @@index([detaineeId], map: "idx_hearing_detainee_btree")
+  @@index([fecha], map: "idx_hearing_fecha_btree")
+  @@map("detainee_hearings")
+}
+
+model DetaineeRecord {
+  id            String   @id @default(cuid())
+  delito        String   @db.VarChar(120)
+  fecha         DateTime @default(now())
+  observaciones String?  @db.Text
+
+  detaineeId String
+  detainee   Detainee @relation(fields: [detaineeId], references: [id], onDelete: Cascade)
+
+  incidentId String?
+  officerId  String?
+  officer    Officer? @relation(fields: [officerId], references: [id], onDelete: SetNull)
+
+  @@index([detaineeId], map: "idx_detainee_record_detainee_btree")
+  @@map("detainee_records")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GUARDIAS Y PRESENCIA OPERATIVA
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OfficerShift {
+  id          String      @id @default(cuid())
+  fecha       DateTime    @db.Date
+  horaInicio  String      @db.VarChar(5)
+  horaFin     String      @db.VarChar(5)
+  status      ShiftStatus @default(ON_DUTY_PENDING)
+  checkedInAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  officerId String
+  officer   Officer @relation(fields: [officerId], references: [id], onDelete: Cascade)
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@index([fecha], map: "idx_shift_fecha_btree")
+  @@index([officerId, fecha], map: "idx_shift_officer_fecha_btree")
+  @@index([departmentId, fecha], map: "idx_shift_dept_fecha_btree")
+  @@map("officer_shifts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOGÍSTICA E INVENTARIO
+// ─────────────────────────────────────────────────────────────────────────────
+
+model InventoryAsset {
+  id           String      @id @default(cuid())
+  code         String      @unique @db.VarChar(32)
+  name         String      @db.VarChar(120)
+  assetType    AssetType
+  serialNumber String?     @db.VarChar(64)
+  status       AssetStatus @default(OPERATIVO)
+  notas        String?     @db.Text
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@index([assetType], map: "idx_inventory_type_btree")
+  @@index([departmentId], map: "idx_inventory_dept_btree")
+  @@map("inventory_assets")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PARQUE DE ARMAS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Weapon {
+  id           String       @id @default(cuid())
+  serialNumber String       @unique @db.VarChar(64)
+  tipo         String       @db.VarChar(60)
+  marca        String?      @db.VarChar(60)
+  modelo       String?      @db.VarChar(60)
+  status       WeaponStatus @default(DISPONIBLE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  assignments WeaponAssignment[]
+
+  @@index([status], map: "idx_weapon_status_btree")
+  @@map("weapons")
+}
+
+model WeaponAssignment {
+  id            String    @id @default(cuid())
+  assignedAt    DateTime  @default(now())
+  returnedAt    DateTime?
+  turno         String?   @db.VarChar(40)
+  observaciones String?   @db.Text
+
+  weaponId String
+  weapon   Weapon @relation(fields: [weaponId], references: [id], onDelete: Restrict)
+
+  officerId String
+  officer   Officer @relation("WeaponAssignee", fields: [officerId], references: [id], onDelete: Restrict)
+
+  assignedByOfficerId String
+  assignedByOfficer   Officer @relation("WeaponAssigner", fields: [assignedByOfficerId], references: [id], onDelete: Restrict)
+
+  @@index([weaponId], map: "idx_weapon_assign_weapon_btree")
+  @@index([officerId], map: "idx_weapon_assign_officer_btree")
+  @@map("weapon_assignments")
 }

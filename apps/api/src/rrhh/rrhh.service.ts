@@ -272,6 +272,27 @@ export class RrhhService {
     });
   }
 
+  async transferOfficer(
+    id: string,
+    data: { departmentId: string; squadId?: string | null },
+  ): Promise<OfficerListItem> {
+    const existing = await this.prisma.officer.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Funcionario no encontrado');
+    }
+
+    const officer = await this.prisma.officer.update({
+      where: { id },
+      data: {
+        departmentId: data.departmentId,
+        squadId: data.squadId ?? null,
+      },
+      select: OFFICER_LIST_SELECT,
+    });
+
+    return this.toListItem(officer);
+  }
+
   async updatePermissions(
     id: string,
     dto: UpdateOfficerPermissionsDto,

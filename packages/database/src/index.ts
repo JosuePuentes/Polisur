@@ -6,13 +6,19 @@ export * from './validation';
 export * from './permissions/sitop-permissions';
 
 export {
+  AssetStatus,
+  AssetType,
   AuditActionKind,
   AuditSeverity,
+  DetaineeStatus,
   EvidenceStage,
   IncidentOrigin,
   IncidentStatus,
+  PatrolType,
   Prisma,
   RangeRole,
+  ShiftStatus,
+  WeaponStatus,
 } from '@prisma/client';
 
 export type {
