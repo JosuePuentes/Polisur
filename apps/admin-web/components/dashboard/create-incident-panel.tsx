@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createIncident, fetchIncidentCatalogs } from '@/lib/api/incidents';
 import { PARROQUIAS_SAN_FRANCISCO, SECTORES_REFERENCIA } from '@/lib/constants/public-portal';
+import { VEHICLE_TYPES } from '@/lib/constants/vehicles';
 import type { IncidentCatalogs } from '@/lib/api/incidents';
 
 const DELITOS = [
@@ -26,6 +27,9 @@ export function CreateIncidentPanel({ onCreated }: CreateIncidentPanelProps) {
   const [descripcion, setDescripcion] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [squadId, setSquadId] = useState('');
+  const [subjectCedula, setSubjectCedula] = useState('');
+  const [vehiclePlate, setVehiclePlate] = useState('');
+  const [vehicleType, setVehicleType] = useState('AUTO');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -61,6 +65,9 @@ export function CreateIncidentPanel({ onCreated }: CreateIncidentPanelProps) {
         descripcion: descripcion.trim(),
         departmentId,
         squadId,
+        subjectCedula: subjectCedula.trim() || undefined,
+        vehiclePlate: vehiclePlate.trim() || undefined,
+        vehicleType: vehiclePlate.trim() ? vehicleType : undefined,
       });
       setSuccess(`Incidente ${incident.code} registrado`);
       setDescripcion('');
@@ -95,6 +102,13 @@ export function CreateIncidentPanel({ onCreated }: CreateIncidentPanelProps) {
           {squads.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
         <textarea required minLength={10} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Relato operativo (mín. 10 caracteres)" className="md:col-span-2 min-h-[90px] rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" />
+        <input value={subjectCedula} onChange={(e) => setSubjectCedula(e.target.value)} placeholder="Cédula implicado (opcional)" className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" />
+        <input value={vehiclePlate} onChange={(e) => setVehiclePlate(e.target.value)} placeholder="Placa / matrícula vehículo (opcional)" className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" />
+        {vehiclePlate.trim() && (
+          <select value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm">
+            {VEHICLE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+        )}
       </div>
       {error && <p className="text-sm text-red-300">{error}</p>}
       {success && <p className="text-sm text-emerald-300">{success}</p>}

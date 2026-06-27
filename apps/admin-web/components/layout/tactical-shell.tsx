@@ -6,8 +6,10 @@ import { clearAuthSession, getSession } from '@/lib/auth';
 import { hasPermission, SITOP_PERMISSIONS } from '@/lib/permissions';
 
 const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Centro de Mando', permission: SITOP_PERMISSIONS.DASHBOARD_VIEW },
+  { href: '/dashboard', label: 'Panel Ejecutivo', permission: SITOP_PERMISSIONS.ANALYTICS_VIEW },
+  { href: '/dashboard/centro-mando', label: 'Centro de Mando', permission: SITOP_PERMISSIONS.DASHBOARD_VIEW },
   { href: '/dashboard/patrullaje', label: 'Patrullaje / Minutas', permission: SITOP_PERMISSIONS.PATROL_VIEW },
+  { href: '/dashboard/procedimientos', label: 'Procedimientos en curso', permission: SITOP_PERMISSIONS.PROCEDURES_VIEW },
   { href: '/dashboard/detenidos', label: 'Detenidos', permission: SITOP_PERMISSIONS.DETAINEES_VIEW },
   { href: '/dashboard/guardias', label: 'Guardias Activas', permission: SITOP_PERMISSIONS.SHIFTS_VIEW },
   { href: '/dashboard/movil', label: 'App Móvil / GPS', permission: SITOP_PERMISSIONS.SHIFTS_VIEW },
@@ -45,9 +47,13 @@ export function TacticalShell({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {visibleNav.map((item) => {
-            const active = !item.external && (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href)));
+            const active =
+              !item.external &&
+              (item.href === '/dashboard'
+                ? pathname === '/dashboard'
+                : pathname === item.href || pathname.startsWith(`${item.href}/`));
             const className = `block rounded-lg px-3 py-2.5 text-sm transition ${active ? 'border border-cyan-500/30 bg-cyan-950/30 text-cyan-300' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`;
-            if (item.external) return <Link key={item.href} href={item.href} target="_blank" className={className}>{item.label}</Link>;
+            if (item.external) return <Link key={item.href} href={item.href} className={className}>{item.label}</Link>;
             return <Link key={item.href} href={item.href} className={className}>{item.label}</Link>;
           })}
         </nav>

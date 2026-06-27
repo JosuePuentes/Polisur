@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { resolveHomeRoute } from '@/lib/utils/home-route';
 import { authenticateOfficer } from '@/lib/auth';
 
 const SECURITY_ALERT =
@@ -20,8 +21,8 @@ export function LoginForm() {
     setIsSubmitting(true);
 
     try {
-      await authenticateOfficer(cedula.trim(), password);
-      router.push('/dashboard');
+      const session = await authenticateOfficer(cedula.trim(), password);
+      router.push(resolveHomeRoute(session.permissions));
       router.refresh();
     } catch {
       setError(SECURITY_ALERT);
@@ -100,15 +101,17 @@ export function LoginForm() {
         />
       </button>
 
-      <p className="text-center text-xs text-slate-500">
-        ¿Eres ciudadano?{' '}
+      <div className="space-y-3 border-t border-slate-800/80 pt-5">
+        <p className="text-center text-xs text-slate-500">
+          ¿Es usted ciudadano y no personal de Polisur?
+        </p>
         <a
           href="/public/denuncias"
-          className="text-cyan-400/90 underline-offset-2 transition hover:text-cyan-300 hover:underline"
+          className="flex w-full items-center justify-center rounded-lg border border-blue-500/30 bg-blue-950/30 px-4 py-3 text-sm font-medium text-blue-200 transition hover:border-blue-400/50 hover:bg-blue-950/50"
         >
-          Portal de denuncias anónimas
+          Ir al Portal Ciudadano — denuncias y pánico
         </a>
-      </p>
+      </div>
     </form>
   );
 }

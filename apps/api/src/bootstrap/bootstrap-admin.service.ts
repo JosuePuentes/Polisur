@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService, RangeRole } from '@polisur/database';
+import { DEFAULT_PEACE_QUADRANTS, PrismaService, RangeRole } from '@polisur/database';
 import * as bcrypt from 'bcrypt';
 
 const BCRYPT_ROUNDS = 12;
@@ -12,6 +12,7 @@ export class BootstrapAdminService {
 
   async runBootstrap(): Promise<void> {
     await this.ensureOrganizationalStructure();
+    await this.ensurePeaceQuadrants();
 
     const cedula = process.env.BOOTSTRAP_CEDULA?.trim();
     const password = process.env.BOOTSTRAP_PASSWORD;
@@ -118,5 +119,27 @@ export class BootstrapAdminService {
     }
 
     this.logger.log('Estructura organizacional inicial creada (8 comandos + escuadra)');
+  }
+
+  async ensurePeaceQuadrants(): Promise<void> {
+    const quadrantCount = await this.prisma.peaceQuadrant.count();
+    if (quadrantCount > 0) {
+      return;
+    }
+
+    for (const seed of DEFAULT_PEACE_QUADRANTS) {
+      await this.prisma.peaceQuadrant.create({
+        data: {
+          code: seed.code,
+          name: seed.name,
+          parroquia: seed.parroquia,
+          centerLat: seed.centerLat,
+          centerLng: seed.centerLng,
+          boundaryPolygon: seed.boundaryPolygon,
+        },
+      });
+    }
+
+    this.logger.log('Cuadrantes de Paz iniciales creados (8 zonas georreferenciadas)');
   }
 }

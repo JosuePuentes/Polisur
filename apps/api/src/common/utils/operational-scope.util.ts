@@ -71,3 +71,17 @@ export function assertPatrolCreateScope(
 
   throw new ForbiddenException(OPERATIONAL_RESOURCE_FORBIDDEN_MESSAGE);
 }
+
+export function assertSuperAdmin(actor: AuthenticatedOfficer): void {
+  assertOperationalActor(actor);
+  if (actor.rangeRole !== RangeRole.SUPER_ADMIN) {
+    throw new ForbiddenException(OPERATIONAL_RESOURCE_FORBIDDEN_MESSAGE);
+  }
+}
+
+export function assertOfficerDepartmentAccess(
+  actor: AuthenticatedOfficer,
+  officerDepartmentId: string,
+): void {
+  assertDepartmentAccess(actor, officerDepartmentId);
+}

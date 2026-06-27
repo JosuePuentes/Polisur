@@ -44,6 +44,19 @@ async function parsePublicError(response: Response): Promise<string> {
   return `Error del servidor (${response.status})`;
 }
 
+async function publicFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch {
+    throw new Error(
+      'No se pudo contactar al servidor. Compruebe su conexión o intente más tarde.',
+    );
+  }
+}
+
 export async function submitPublicDenuncia(
   payload: PublicDenunciaPayload,
 ): Promise<PublicIncidentResponse> {
@@ -57,7 +70,7 @@ export async function submitPublicDenuncia(
     formData.append('evidencias', file);
   }
 
-  const response = await fetch(`${API_BASE_URL}/public/denuncias`, {
+  const response = await publicFetch(`${API_BASE_URL}/public/denuncias`, {
     method: 'POST',
     body: formData,
   });
@@ -72,7 +85,7 @@ export async function submitPublicDenuncia(
 export async function submitPanicAlert(
   payload: PanicAlertPayload,
 ): Promise<PublicIncidentResponse> {
-  const response = await fetch(`${API_BASE_URL}/public/panico`, {
+  const response = await publicFetch(`${API_BASE_URL}/public/panico`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

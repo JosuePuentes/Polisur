@@ -3,7 +3,21 @@ export { PrismaService } from './prisma.service';
 
 export * from './dto';
 export * from './validation';
-export * from './permissions/sitop-permissions';
+export {
+  ALL_SITOP_PERMISSIONS,
+  ROLE_DEFAULT_PERMISSIONS,
+  SITOP_PERMISSION_LABELS,
+  SITOP_PERMISSIONS,
+  officerHasPermission,
+  resolveOfficerPermissions,
+  type SitopPermission,
+} from './permissions/sitop-permissions';
+export {
+  DEFAULT_PEACE_QUADRANTS,
+  DEFAULT_PEACE_QUADRANT_NAMES,
+  quadrantCodeFromName,
+  type DefaultPeaceQuadrantSeed,
+} from './constants/default-peace-quadrants';
 
 export {
   AssetStatus,
@@ -11,13 +25,19 @@ export {
   AuditActionKind,
   AuditSeverity,
   DetaineeStatus,
+  DetaineePhotoKind,
+  DivisionRole,
   EvidenceStage,
   IncidentOrigin,
   IncidentStatus,
+  MinuteRole,
+  ProcedureOutcome,
+  ProcedureStatus,
   PatrolType,
   Prisma,
   RangeRole,
   ShiftStatus,
+  VehicleType,
   WeaponStatus,
 } from '@prisma/client';
 

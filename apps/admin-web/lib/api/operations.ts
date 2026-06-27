@@ -29,33 +29,86 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const opsApi = {
   listCommands: () => api<unknown[]>('/commands'),
+  createCommand: (body: {
+    code: string;
+    name: string;
+    description?: string;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+  }) => api('/commands', { method: 'POST', body: JSON.stringify(body) }),
   updateCommand: (id: string, body: Record<string, unknown>) =>
     api(`/commands/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  listQuadrants: () => api<unknown[]>('/quadrants'),
-  createQuadrant: (body: unknown) => api('/quadrants', { method: 'POST', body: JSON.stringify(body) }),
+  listQuadrants: () =>
+    api<
+      Array<{
+        id: string;
+        code: string;
+        name: string;
+        parroquia: string;
+        centerLat: number | null;
+        centerLng: number | null;
+        boundaryPolygon: [number, number][] | null;
+      }>
+    >('/quadrants'),
+  createQuadrant: (body: {
+    code: string;
+    name: string;
+    parroquia: string;
+    centerLat?: number;
+    centerLng?: number;
+    boundaryPolygon: [number, number][];
+  }) => api('/quadrants', { method: 'POST', body: JSON.stringify(body) }),
   listPatrols: (departmentId?: string) =>
     api<unknown[]>(`/patrols${departmentId ? `?departmentId=${departmentId}` : ''}`),
   createPatrol: (body: unknown) => api('/patrols', { method: 'POST', body: JSON.stringify(body) }),
   addRecoveredObject: (patrolId: string, body: unknown) =>
     api(`/patrols/${patrolId}/recovered-objects`, { method: 'POST', body: JSON.stringify(body) }),
   heatmap: () => api<{ patrols: unknown[]; incidents: unknown[] }>('/heatmap'),
-  listDetainees: (status?: string) =>
-    api<unknown[]>(`/detainees${status ? `?status=${status}` : ''}`),
+  listDetainees: (params?: { status?: string; convicted?: boolean; cellId?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set('status', params.status);
+    if (params?.convicted !== undefined) qs.set('convicted', String(params.convicted));
+    if (params?.cellId) qs.set('cellId', params.cellId);
+    const query = qs.toString();
+    return api<unknown[]>(`/detainees${query ? `?${query}` : ''}`);
+  },
+  listDetentionCells: () => api<unknown[]>('/detention-cells'),
+  createDetentionCell: (body: { code: string; name: string; block?: string; capacity?: number }) =>
+    api('/detention-cells', { method: 'POST', body: JSON.stringify(body) }),
   getDetainee: (id: string) => api<unknown>(`/detainees/${id}`),
-  createDetainee: (body: unknown) => api('/detainees', { method: 'POST', body: JSON.stringify(body) }),
+  createDetaineeForm: (formData: FormData) =>
+    fetch(`${API_BASE_URL}/operations/detainees`, {
+      method: 'POST',
+      headers: {
+        ...(getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {}),
+      },
+      body: formData,
+    }).then(async (response) => {
+      if (!response.ok) throw new Error(await parseError(response));
+      return response.json();
+    }),
+  updateDetainee: (id: string, body: Record<string, unknown>) =>
+    api(`/detainees/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   addHearing: (id: string, body: unknown) =>
     api(`/detainees/${id}/hearings`, { method: 'POST', body: JSON.stringify(body) }),
-  listShifts: (fecha?: string, departmentId?: string) => {
+  listShifts: (fecha?: string, departmentId?: string, activeOnly?: boolean) => {
     const params = new URLSearchParams();
     if (fecha) params.set('fecha', fecha);
     if (departmentId) params.set('departmentId', departmentId);
+    if (activeOnly) params.set('activeOnly', 'true');
     const qs = params.toString();
     return api<unknown[]>(`/shifts${qs ? `?${qs}` : ''}`);
   },
-  activeRoster: (departmentId?: string) =>
-    api<Array<{ officer: unknown; shift: unknown; dotStatus: string }>>(
-      `/shifts/roster${departmentId ? `?departmentId=${departmentId}` : ''}`,
-    ),
+  activeRoster: (departmentId?: string, fecha?: string) => {
+    const params = new URLSearchParams();
+    if (departmentId) params.set('departmentId', departmentId);
+    if (fecha) params.set('fecha', fecha);
+    const qs = params.toString();
+    return api<Array<{ officer: unknown; shift: unknown; dotStatus: string; commandName: string; commandCode: string }>>(
+      `/shifts/roster${qs ? `?${qs}` : ''}`,
+    );
+  },
   createShift: (body: unknown) => api('/shifts', { method: 'POST', body: JSON.stringify(body) }),
   checkInShift: (id: string, body?: { latitude?: number; longitude?: number }) =>
     api(`/shifts/${id}/check-in`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
@@ -77,15 +130,25 @@ export const opsApi = {
     return api<unknown[]>(`/inventory${qs ? `?${qs}` : ''}`);
   },
   inventoryByShift: (departmentId: string, fecha?: string) =>
-    api<{ fecha: string; turnos: Array<{ turno: string; officers: unknown[]; assets: unknown[] }>; unassigned: unknown[] }>(
-      `/inventory/by-shift?departmentId=${departmentId}${fecha ? `&fecha=${fecha}` : ''}`,
-    ),
+    api<{
+      fecha: string;
+      turnos: Array<{ turno: string; officers: unknown[]; assets: unknown[] }>;
+      unassigned: Array<{ code: string; name: string }>;
+      atCommandPool: Array<{ code: string; name: string }>;
+    }>(`/inventory/by-shift?departmentId=${departmentId}${fecha ? `&fecha=${fecha}` : ''}`),
   inventorySummary: (departmentId?: string) =>
     api<unknown[]>(`/inventory/summary${departmentId ? `?departmentId=${departmentId}` : ''}`),
-  assignInventory: (id: string, body: { officerId: string; turno: string }) =>
+  assignInventory: (id: string, body: { officerId?: string | null; turno?: string }) =>
     api(`/inventory/${id}/assign`, { method: 'POST', body: JSON.stringify(body) }),
   releaseInventory: (id: string) => api(`/inventory/${id}/release`, { method: 'POST' }),
-  createAsset: (body: unknown) => api('/inventory', { method: 'POST', body: JSON.stringify(body) }),
+  createAsset: (body: {
+    code: string;
+    name: string;
+    assetType: string;
+    departmentId: string;
+    serialNumber?: string;
+    notas?: string;
+  }) => api('/inventory', { method: 'POST', body: JSON.stringify(body) }),
   listWeapons: () => api<unknown[]>('/weapons'),
   createWeapon: (body: unknown) => api('/weapons', { method: 'POST', body: JSON.stringify(body) }),
   assignWeapon: (id: string, body: unknown) =>

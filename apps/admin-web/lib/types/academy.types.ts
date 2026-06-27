@@ -9,6 +9,14 @@ export interface PromocionDiscente {
   cedula: string;
   nombres: string;
   apellidos: string;
+  telefono: string | null;
+  direccion: string | null;
+  tipoSangre: string | null;
+  alturaCm: number | null;
+  pesoKg: number | null;
+  colorPiel: string | null;
+  contextura: string | null;
+  _count: { discenteDocuments: number };
 }
 
 export interface Promocion {
@@ -28,6 +36,23 @@ export interface RegisterDiscentePayload {
   apellidos: string;
   departmentId: string;
   promocionId: string;
+  direccion?: string;
+  telefono?: string;
+  tipoSangre?: string;
+  alturaCm?: number;
+  pesoKg?: number;
+  colorPiel?: string;
+  contextura?: string;
+}
+
+export interface DiscenteDocument {
+  id: string;
+  filename: string;
+  originalName: string | null;
+  mimeType: string;
+  label: string | null;
+  sortOrder: number;
+  url: string;
 }
 
 export interface RegisteredDiscente {
@@ -38,6 +63,14 @@ export interface RegisteredDiscente {
   rangeRole: string;
   departmentId: string;
   promocionId: string | null;
+  telefono: string | null;
+  direccion: string | null;
+  tipoSangre: string | null;
+  alturaCm: number | null;
+  pesoKg: number | null;
+  colorPiel: string | null;
+  contextura: string | null;
+  discenteDocuments?: DiscenteDocument[];
 }
 
 export interface GraduatePromocionResult {

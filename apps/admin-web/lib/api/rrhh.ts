@@ -3,6 +3,7 @@ import { API_BASE_URL } from '@/lib/constants';
 import type { SitopPermission } from '@/lib/permissions';
 import type {
   CreateOfficerPayload,
+  CreateOfficerProfilePayload,
   OfficerRecord,
   RrhhCatalogs,
 } from '@/lib/types/rrhh.types';
@@ -68,6 +69,49 @@ export async function searchOfficers(query?: string): Promise<OfficerRecord[]> {
   });
   if (!response.ok) throw new Error(await parseError(response));
   return response.json() as Promise<OfficerRecord[]>;
+}
+
+export async function createOfficerProfileForm(formData: FormData): Promise<OfficerRecord> {
+  const token = getAccessToken();
+  const response = await fetch(`${API_BASE_URL}/rrhh/officers/profile`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<OfficerRecord>;
+}
+
+export async function assignOfficerToCommand(
+  id: string,
+  payload: {
+    departmentId: string;
+    squadId?: string | null;
+    divisionRole: 'DIRECTOR' | 'SUB_DIRECTOR' | 'ORDINARIO';
+  },
+): Promise<OfficerRecord> {
+  const response = await fetch(`${API_BASE_URL}/rrhh/officers/${id}/assign`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<OfficerRecord>;
+}
+
+export async function activateOfficerAccount(
+  id: string,
+  payload: { password: string; permissions?: SitopPermission[] },
+): Promise<OfficerRecord> {
+  const response = await fetch(`${API_BASE_URL}/rrhh/officers/${id}/activate`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<OfficerRecord>;
 }
 
 export async function createOfficer(

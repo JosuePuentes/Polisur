@@ -1,6 +1,6 @@
 'use client';
 
-import { DetaineesPanel } from '@/components/operations/ops-panels';
+import { DetaineesPanel } from '@/components/operations/detainees-panel';
 import { getSession } from '@/lib/auth';
 import { hasPermission, SITOP_PERMISSIONS } from '@/lib/permissions';
 

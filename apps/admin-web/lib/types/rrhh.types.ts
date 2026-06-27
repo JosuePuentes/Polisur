@@ -19,7 +19,10 @@ export interface OfficerRecord {
   nombres: string;
   apellidos: string;
   rangeRole: string;
+  divisionRole: string;
   credentialNumber: string;
+  profilePhotoUrl: string | null;
+  assignmentLabel: string;
   telefono: string | null;
   email: string | null;
   fechaNacimiento: string | null;
@@ -35,6 +38,18 @@ export interface OfficerRecord {
   promocionId: string | null;
   department: { id: string; code: string; name: string };
   squad: { id: string; name: string; callsign: string | null } | null;
+}
+
+export interface CreateOfficerProfilePayload {
+  cedula: string;
+  nombres: string;
+  apellidos: string;
+  telefono?: string;
+  email?: string;
+  fechaNacimiento?: string;
+  direccion?: string;
+  grado?: string;
+  fechaIngreso?: string;
 }
 
 export interface CreateOfficerPayload {

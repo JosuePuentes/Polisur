@@ -195,6 +195,10 @@ export class IncidentsService {
 
         descripcion: dto.descripcion,
 
+        subjectCedula: dto.subjectCedula?.trim() || undefined,
+        vehiclePlate: dto.vehiclePlate?.replace(/[\s-]/g, '').toUpperCase().trim() || undefined,
+        vehicleType: dto.vehicleType,
+
         departmentId: dto.departmentId,
 
         squadId: dto.squadId,

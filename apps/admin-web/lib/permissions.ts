@@ -1,4 +1,5 @@
 export const SITOP_PERMISSIONS = {
+  ANALYTICS_VIEW: 'analytics.view',
   DASHBOARD_VIEW: 'dashboard.view',
   INCIDENTS_VIEW: 'incidents.view',
   INCIDENTS_CREATE: 'incidents.create',
@@ -16,6 +17,8 @@ export const SITOP_PERMISSIONS = {
   QUADRANTS_MANAGE: 'quadrants.manage',
   PATROL_VIEW: 'patrol.view',
   PATROL_MANAGE: 'patrol.manage',
+  PROCEDURES_VIEW: 'procedures.view',
+  PROCEDURES_MANAGE: 'procedures.manage',
   DETAINEES_VIEW: 'detainees.view',
   DETAINEES_MANAGE: 'detainees.manage',
   SHIFTS_VIEW: 'shifts.view',
@@ -31,6 +34,7 @@ export type SitopPermission =
   (typeof SITOP_PERMISSIONS)[keyof typeof SITOP_PERMISSIONS];
 
 export const PERMISSION_LABELS: Record<SitopPermission, string> = {
+  [SITOP_PERMISSIONS.ANALYTICS_VIEW]: 'Panel ejecutivo e indicadores',
   [SITOP_PERMISSIONS.DASHBOARD_VIEW]: 'Centro de Mando',
   [SITOP_PERMISSIONS.INCIDENTS_VIEW]: 'Ver incidentes y denuncias',
   [SITOP_PERMISSIONS.INCIDENTS_CREATE]: 'Crear minutas y patrullajes',
@@ -48,6 +52,8 @@ export const PERMISSION_LABELS: Record<SitopPermission, string> = {
   [SITOP_PERMISSIONS.QUADRANTS_MANAGE]: 'Gestionar cuadrantes',
   [SITOP_PERMISSIONS.PATROL_VIEW]: 'Patrullaje y minutas',
   [SITOP_PERMISSIONS.PATROL_MANAGE]: 'Registrar patrullajes',
+  [SITOP_PERMISSIONS.PROCEDURES_VIEW]: 'Procedimientos en curso',
+  [SITOP_PERMISSIONS.PROCEDURES_MANAGE]: 'Cerrar procedimientos',
   [SITOP_PERMISSIONS.DETAINEES_VIEW]: 'Detenidos / calabozos',
   [SITOP_PERMISSIONS.DETAINEES_MANAGE]: 'Gestionar detenidos',
   [SITOP_PERMISSIONS.SHIFTS_VIEW]: 'Guardias activas',

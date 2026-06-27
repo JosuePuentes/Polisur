@@ -21,6 +21,13 @@ enum RangeRole {
   DISCENTE
 }
 
+enum DivisionRole {
+  SIN_ASIGNAR
+  DIRECTOR
+  SUB_DIRECTOR
+  ORDINARIO
+}
+
 enum IncidentStatus {
   PENDIENTE
   DESPACHADO
@@ -80,16 +87,53 @@ enum WeaponStatus {
 }
 
 enum DetaineeStatus {
+  EN_TRANSITO
   EN_CALABOZO
   AUDIENCIA
   TRASLADADO_FISCALIA
   LIBERADO
 }
 
+enum DetaineePhotoKind {
+  FRONT
+  PROFILE_LEFT
+  PROFILE_RIGHT
+  BACK
+  DOCUMENT
+  OTHER
+}
+
 enum PatrolType {
   PATRULLAJE
   MINUTA
   PROCEDIMIENTO_MIXTO
+}
+
+enum MinuteRole {
+  SALIDA
+  LLEGADA
+}
+
+enum ProcedureStatus {
+  EN_CURSO
+  PENDIENTE_CIERRE
+  SIN_NOVEDAD
+  EXITOSO
+}
+
+enum ProcedureOutcome {
+  SIN_NOVEDAD
+  TRASLADO_CIUDADANO
+  TRASLADO_OBJETO
+}
+
+enum VehicleType {
+  AUTO
+  MOTO
+  CAMIONETA
+  CAMION
+  BICICLETA
+  OTRO
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -117,6 +161,7 @@ model Department {
   incidents        Incident[]
   controlPoints    ControlPoint[]
   patrolMinutes    PatrolMinute[]
+  procedures       Procedure[]
   inventoryAssets  InventoryAsset[]
   weapons          Weapon[]
   officerShifts    OfficerShift[]
@@ -145,6 +190,7 @@ model Squad {
   members       Officer[]      @relation("SquadMembers")
   incidents     Incident[]
   patrolMinutes PatrolMinute[]
+  procedures    Procedure[]
 
   @@index([departmentId], map: "idx_squad_department_btree")
   @@index([isActive], map: "idx_squad_active_btree")
@@ -158,14 +204,21 @@ model Officer {
   cedula           String    @unique @db.VarChar(20)
   nombres          String    @db.VarChar(80)
   apellidos        String    @db.VarChar(80)
-  rangeRole        RangeRole @default(OFICIAL_ACTIVO)
-  passwordHash     String?   @db.VarChar(255)
-  credentialNumber String    @unique @db.VarChar(32)
-  qrToken          String    @unique @default(cuid()) @db.VarChar(64)
+  rangeRole        RangeRole    @default(OFICIAL_ACTIVO)
+  divisionRole     DivisionRole @default(SIN_ASIGNAR)
+  passwordHash     String?      @db.VarChar(255)
+  credentialNumber String       @unique @db.VarChar(32)
+  qrToken          String       @unique @default(cuid()) @db.VarChar(64)
+  profilePhotoFilename String?  @db.VarChar(120)
   telefono         String?   @db.VarChar(20)
   email            String?   @db.VarChar(120)
   fechaNacimiento  DateTime? @db.Date
   direccion        String?   @db.VarChar(200)
+  tipoSangre       String?   @db.VarChar(8)
+  alturaCm         Float?
+  pesoKg           Float?
+  colorPiel        String?   @db.VarChar(40)
+  contextura       String?   @db.VarChar(40)
   grado            String?   @db.VarChar(60)
   fechaIngreso     DateTime? @db.Date
   permissions      String[]  @default([])
@@ -201,13 +254,32 @@ model Officer {
   auditLogs            AuditLog[]
   patrolParticipations PatrolMinuteOfficer[]
   createdPatrols       PatrolMinute[]        @relation("PatrolCreator")
+  closedProcedures     Procedure[]           @relation("ProcedureCloser")
   shifts               OfficerShift[]
   weaponAssignments    WeaponAssignment[]    @relation("WeaponAssignee")
   assignedWeapons      WeaponAssignment[]    @relation("WeaponAssigner")
   assignedInventory    InventoryAsset[]      @relation("InventoryAssignee")
   detaineeRecords      DetaineeRecord[]
+  discenteDocuments    DiscenteDocument[]
 
   @@map("officers")
+}
+
+/// Documentos o imágenes adjuntas al expediente del discente (hasta 6)
+model DiscenteDocument {
+  id           String   @id @default(cuid())
+  filename     String   @unique @db.VarChar(120)
+  originalName String?  @db.VarChar(200)
+  mimeType     String   @db.VarChar(80)
+  label        String?  @db.VarChar(80)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  officerId String
+  officer   Officer @relation(fields: [officerId], references: [id], onDelete: Cascade)
+
+  @@index([officerId], map: "idx_discente_doc_officer_btree")
+  @@map("discente_documents")
 }
 
 /// Cohorte de la academia policial vinculada a discentes
@@ -242,6 +314,10 @@ model Incident {
   descripcion String         @db.Text
   latitude    Float?
   longitude   Float?
+  /// Cédula del implicado (sospechoso, víctima o referencia operativa)
+  subjectCedula String?      @db.VarChar(20)
+  vehiclePlate  String?      @db.VarChar(16)
+  vehicleType   VehicleType?
   origen      IncidentOrigin @default(INTERNO)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
@@ -268,6 +344,8 @@ model Incident {
   @@index([departmentId, status], map: "idx_incident_dept_status_btree")
   @@index([createdAt], map: "idx_incident_created_btree")
   @@index([origen], map: "idx_incident_origen_btree")
+  @@index([subjectCedula], map: "idx_incident_subject_cedula_btree")
+  @@index([vehiclePlate], map: "idx_incident_vehicle_plate_btree")
   @@map("incidents")
 }
 
@@ -349,15 +427,17 @@ model ControlPoint {
 }
 
 model PeaceQuadrant {
-  id           String   @id @default(cuid())
-  code         String   @unique @db.VarChar(24)
-  name         String   @db.VarChar(80)
-  parroquia    String   @db.VarChar(80)
-  centerLat    Float?
-  centerLng    Float?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String   @id @default(cuid())
+  code             String   @unique @db.VarChar(24)
+  name             String   @db.VarChar(80)
+  parroquia        String   @db.VarChar(80)
+  centerLat        Float?
+  centerLng        Float?
+  /// Vértices [[lat, lng], ...] del perímetro que abarca el cuadrante
+  boundaryPolygon  Json?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([parroquia], map: "idx_peace_quadrant_parroquia_btree")
   @@map("peace_quadrants")
@@ -371,6 +451,7 @@ model PatrolMinute {
   id           String     @id @default(cuid())
   code         String     @unique @db.VarChar(24)
   patrolType   PatrolType @default(MINUTA)
+  minuteRole   MinuteRole @default(SALIDA)
   parroquia    String     @db.VarChar(80)
   cuadrante    String     @db.VarChar(40)
   descripcion  String     @db.Text
@@ -392,9 +473,13 @@ model PatrolMinute {
 
   officers         PatrolMinuteOfficer[]
   recoveredObjects RecoveredObject[]
+  vehicles         PatrolMinuteVehicle[]
+  procedureDeparture Procedure? @relation("ProcedureDeparture")
+  procedureArrival   Procedure? @relation("ProcedureArrival")
 
   @@index([departmentId], map: "idx_patrol_dept_btree")
   @@index([createdAt], map: "idx_patrol_created_btree")
+  @@index([minuteRole], map: "idx_patrol_minute_role_btree")
   @@map("patrol_minutes")
 }
 
@@ -420,6 +505,8 @@ model PatrolMinuteOfficer {
 model RecoveredObject {
   id          String   @id @default(cuid())
   description String   @db.VarChar(300)
+  /// Placa, serial o matrícula del objeto (ej. bicicleta)
+  identifier  String?  @db.VarChar(32)
   quantity    Int      @default(1)
   unit        String?  @db.VarChar(40)
   photoUrl    String?  @db.VarChar(2048)
@@ -431,33 +518,137 @@ model RecoveredObject {
   incidentId String?
 
   @@index([patrolMinuteId], map: "idx_recovered_patrol_btree")
+  @@index([identifier], map: "idx_recovered_identifier_btree")
   @@map("recovered_objects")
+}
+
+/// Vehículos vinculados opcionalmente a una minuta de patrullaje
+model PatrolMinuteVehicle {
+  id          String      @id @default(cuid())
+  plate       String      @db.VarChar(16)
+  vehicleType VehicleType
+  ownerCedula String?     @db.VarChar(20)
+  notes       String?     @db.VarChar(200)
+  createdAt   DateTime    @default(now())
+
+  patrolMinuteId String
+  patrolMinute   PatrolMinute @relation(fields: [patrolMinuteId], references: [id], onDelete: Cascade)
+
+  @@index([patrolMinuteId], map: "idx_patrol_vehicle_minute_btree")
+  @@index([plate], map: "idx_patrol_vehicle_plate_btree")
+  @@index([ownerCedula], map: "idx_patrol_vehicle_owner_cedula_btree")
+  @@map("patrol_minute_vehicles")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROCEDIMIENTOS EN CURSO
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Procedure {
+  id              String            @id @default(cuid())
+  code            String            @unique @db.VarChar(24)
+  status          ProcedureStatus   @default(EN_CURSO)
+  outcome         ProcedureOutcome?
+  bringsDetainee  Boolean?
+  bringsObjects   Boolean?
+  fijaciones      String?           @db.Text
+  mergedNarrative String?           @db.Text
+  closedAt        DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  squadId String?
+  squad   Squad?  @relation(fields: [squadId], references: [id], onDelete: SetNull)
+
+  departureMinuteId String @unique
+  departureMinute   PatrolMinute @relation("ProcedureDeparture", fields: [departureMinuteId], references: [id], onDelete: Restrict)
+
+  arrivalMinuteId String? @unique
+  arrivalMinute   PatrolMinute? @relation("ProcedureArrival", fields: [arrivalMinuteId], references: [id], onDelete: SetNull)
+
+  detaineeId String? @unique
+  detainee   Detainee? @relation(fields: [detaineeId], references: [id], onDelete: SetNull)
+
+  closedByOfficerId String?
+  closedByOfficer   Officer? @relation("ProcedureCloser", fields: [closedByOfficerId], references: [id], onDelete: SetNull)
+
+  @@index([departmentId], map: "idx_procedure_dept_btree")
+  @@index([squadId], map: "idx_procedure_squad_btree")
+  @@index([status], map: "idx_procedure_status_btree")
+  @@index([createdAt], map: "idx_procedure_created_btree")
+  @@map("procedures")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DETENIDOS Y CALABOZOS
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Celda / calabozo físico (registro independiente, similar a un comando local)
+model DetentionCell {
+  id        String   @id @default(cuid())
+  code      String   @unique @db.VarChar(32)
+  name      String   @db.VarChar(120)
+  block     String?  @db.VarChar(80)
+  capacity  Int?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  detainees Detainee[]
+
+  @@index([isActive], map: "idx_detention_cell_active_btree")
+  @@map("detention_cells")
+}
+
 model Detainee {
-  id         String         @id @default(cuid())
-  cedula     String?        @db.VarChar(20)
-  nombres    String         @db.VarChar(80)
-  apellidos  String         @db.VarChar(80)
-  alias      String?        @db.VarChar(80)
-  cellNumber String?        @db.VarChar(20)
-  status     DetaineeStatus @default(EN_CALABOZO)
-  ingresoAt  DateTime       @default(now())
-  egresoAt   DateTime?
-  notas      String?        @db.Text
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  cedula          String?        @db.VarChar(20)
+  nombres         String         @db.VarChar(80)
+  apellidos       String         @db.VarChar(80)
+  alias           String?        @db.VarChar(80)
+  cellNumber      String?        @db.VarChar(20)
+  status          DetaineeStatus @default(EN_CALABOZO)
+  isConvicted     Boolean        @default(false)
+  sentenceYears   Float?
+  ingresoAt       DateTime       @default(now())
+  egresoAt        DateTime?
+  notas           String?        @db.Text
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  detentionCellId String?
+  detentionCell   DetentionCell? @relation(fields: [detentionCellId], references: [id], onDelete: SetNull)
+
+  procedure Procedure?
 
   hearings DetaineeHearing[]
   records  DetaineeRecord[]
+  photos   DetaineePhoto[]
 
   @@index([cedula], map: "idx_detainee_cedula_btree")
   @@index([status], map: "idx_detainee_status_btree")
+  @@index([detentionCellId], map: "idx_detainee_cell_btree")
+  @@index([isConvicted], map: "idx_detainee_convicted_btree")
   @@map("detainees")
+}
+
+model DetaineePhoto {
+  id        String            @id @default(cuid())
+  kind      DetaineePhotoKind
+  label     String?           @db.VarChar(120)
+  filename  String            @db.VarChar(255)
+  publicUrl String            @db.VarChar(500)
+  isPrimary Boolean           @default(false)
+  createdAt DateTime          @default(now())
+
+  detaineeId String
+  detainee   Detainee @relation(fields: [detaineeId], references: [id], onDelete: Cascade)
+
+  @@index([detaineeId], map: "idx_detainee_photo_detainee_btree")
+  @@map("detainee_photos")
 }
 
 model DetaineeHearing {
@@ -532,6 +723,7 @@ model InventoryAsset {
   name         String      @db.VarChar(120)
   assetType    AssetType
   serialNumber String?     @db.VarChar(64)
+  plate        String?     @db.VarChar(16)
   status       AssetStatus @default(OPERATIVO)
   notas        String?     @db.Text
   turno        String?     @db.VarChar(20)
@@ -549,6 +741,7 @@ model InventoryAsset {
   @@index([departmentId], map: "idx_inventory_dept_btree")
   @@index([assignedOfficerId], map: "idx_inventory_officer_btree")
   @@index([turno], map: "idx_inventory_turno_btree")
+  @@index([plate], map: "idx_inventory_plate_btree")
   @@map("inventory_assets")
 }
 

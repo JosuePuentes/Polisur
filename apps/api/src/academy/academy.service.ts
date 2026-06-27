@@ -4,6 +4,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import { createReadStream } from 'node:fs';
 import {
   Prisma,
   PrismaService,
@@ -16,12 +18,18 @@ import { AuthenticatedOfficer } from '../common/interfaces/authenticated-officer
 import {
   ACADEMY_DEPARTMENT_CODE,
   BCRYPT_ROUNDS,
+  BLOOD_TYPES,
+  BODY_BUILDS,
   DEFAULT_DISCENTE_PASSWORD,
+  DISCENTE_LIST_SELECT,
   GRADUATED_OFFICER_SELECT,
+  SKIN_COLORS,
 } from './constants/academy.constants';
 import { CreateDiscenteDto } from './dto/create-discente.dto';
 import { CreatePromocionDto } from './dto/create-promocion.dto';
 import { UpdatePromocionDto } from './dto/update-promocion.dto';
+import { DiscenteStorageService } from './services/discente-storage.service';
+import { DISCENTE_FILE_FIELDS } from './interceptors/discente-files.interceptor';
 import {
   GraduatePromocionResult,
   GraduatedOfficer,
@@ -34,6 +42,7 @@ export class AcademyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly discenteStorage: DiscenteStorageService,
   ) {}
 
   async findAllPromociones(): Promise<PromocionWithDiscentes[]> {
@@ -42,12 +51,7 @@ export class AcademyService {
       include: {
         discentes: {
           where: { rangeRole: RangeRole.DISCENTE },
-          select: {
-            id: true,
-            cedula: true,
-            nombres: true,
-            apellidos: true,
-          },
+          select: DISCENTE_LIST_SELECT,
           orderBy: { apellidos: 'asc' },
         },
       },
@@ -113,7 +117,10 @@ export class AcademyService {
     });
   }
 
-  async registerDiscente(dto: CreateDiscenteDto): Promise<GraduatedOfficer> {
+  async registerDiscente(
+    dto: CreateDiscenteDto,
+    files?: Record<string, Express.Multer.File[]>,
+  ): Promise<unknown> {
     await this.assertAcademyDepartment(dto.departmentId);
 
     const promocion = await this.prisma.promocion.findUnique({
@@ -127,6 +134,8 @@ export class AcademyService {
       );
     }
 
+    const profile = this.normalizeDiscenteProfile(dto);
+
     const passwordHash = await bcrypt.hash(
       DEFAULT_DISCENTE_PASSWORD,
       BCRYPT_ROUNDS,
@@ -136,7 +145,7 @@ export class AcademyService {
     const credentialNumber = this.buildCredentialNumber(cedula);
 
     try {
-      return await this.prisma.officer.create({
+      const officer = await this.prisma.officer.create({
         data: {
           cedula,
           nombres: dto.nombres.trim(),
@@ -146,12 +155,155 @@ export class AcademyService {
           credentialNumber,
           departmentId: dto.departmentId,
           promocionId: dto.promocionId,
+          ...profile,
         },
         select: GRADUATED_OFFICER_SELECT,
       });
+
+      if (files) {
+        await this.persistDiscenteDocuments(officer.id, files);
+      }
+
+      return this.getDiscenteDetail(officer.id);
     } catch (error) {
       this.handlePrismaUniqueViolation(error, cedula);
       throw error;
+    }
+  }
+
+  async getDiscenteDetail(officerId: string): Promise<unknown> {
+    const officer = await this.prisma.officer.findUnique({
+      where: { id: officerId, rangeRole: RangeRole.DISCENTE },
+      select: {
+        ...GRADUATED_OFFICER_SELECT,
+        discenteDocuments: {
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true,
+            filename: true,
+            originalName: true,
+            mimeType: true,
+            label: true,
+            sortOrder: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    if (!officer) {
+      throw new NotFoundException('Discente no encontrado');
+    }
+
+    return {
+      ...officer,
+      discenteDocuments: officer.discenteDocuments.map((doc) => ({
+        ...doc,
+        url: this.discenteStorage.buildPublicApiUrl(doc.filename),
+      })),
+    };
+  }
+
+  async streamDiscenteFile(filename: string, res: Response): Promise<void> {
+    await this.discenteStorage.ensureStorageReady();
+    this.discenteStorage.assertSafeFilename(filename);
+
+    const document = await this.prisma.discenteDocument.findFirst({
+      where: { filename },
+      select: { mimeType: true },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Archivo no encontrado');
+    }
+
+    const absolutePath = this.discenteStorage.resolveAbsolutePath(filename);
+    res.setHeader('Content-Type', document.mimeType);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+
+    await new Promise<void>((resolve, reject) => {
+      createReadStream(absolutePath)
+        .on('error', reject)
+        .on('end', resolve)
+        .pipe(res);
+    });
+  }
+
+  private normalizeDiscenteProfile(dto: CreateDiscenteDto): {
+    direccion?: string | null;
+    telefono?: string | null;
+    tipoSangre?: string | null;
+    alturaCm?: number | null;
+    pesoKg?: number | null;
+    colorPiel?: string | null;
+    contextura?: string | null;
+  } {
+    const tipoSangre = dto.tipoSangre?.trim().toUpperCase() || null;
+    if (tipoSangre && !BLOOD_TYPES.includes(tipoSangre as (typeof BLOOD_TYPES)[number])) {
+      throw new BadRequestException('Tipo de sangre no válido');
+    }
+
+    const contextura = dto.contextura?.trim() || null;
+    if (contextura && !BODY_BUILDS.includes(contextura as (typeof BODY_BUILDS)[number])) {
+      throw new BadRequestException('Contextura no válida');
+    }
+
+    const colorPiel = dto.colorPiel?.trim() || null;
+    if (colorPiel && !SKIN_COLORS.includes(colorPiel as (typeof SKIN_COLORS)[number])) {
+      throw new BadRequestException('Color de piel no válido');
+    }
+
+    const alturaCm = dto.alturaCm != null ? Number(dto.alturaCm) : null;
+    const pesoKg = dto.pesoKg != null ? Number(dto.pesoKg) : null;
+
+    if (alturaCm != null && (Number.isNaN(alturaCm) || alturaCm < 100 || alturaCm > 250)) {
+      throw new BadRequestException('Altura inválida (use centímetros entre 100 y 250)');
+    }
+
+    if (pesoKg != null && (Number.isNaN(pesoKg) || pesoKg < 30 || pesoKg > 250)) {
+      throw new BadRequestException('Peso inválido (use kilogramos entre 30 y 250)');
+    }
+
+    return {
+      direccion: dto.direccion?.trim() || null,
+      telefono: dto.telefono?.trim() || null,
+      tipoSangre,
+      alturaCm,
+      pesoKg,
+      colorPiel,
+      contextura,
+    };
+  }
+
+  private async persistDiscenteDocuments(
+    officerId: string,
+    files: Record<string, Express.Multer.File[]>,
+  ): Promise<void> {
+    let sortOrder = 0;
+
+    for (const field of DISCENTE_FILE_FIELDS) {
+      const uploaded = files[field.name]?.[0];
+      if (!uploaded?.buffer) continue;
+
+      const isPdf = uploaded.mimetype === 'application/pdf';
+      const saved = await this.discenteStorage.saveBuffer(
+        uploaded.buffer,
+        officerId,
+        isPdf ? 'pdf' : 'webp',
+      );
+
+      await this.prisma.discenteDocument.create({
+        data: {
+          officerId,
+          filename: saved.filename,
+          originalName: uploaded.originalname?.slice(0, 200) || null,
+          mimeType: isPdf ? 'application/pdf' : 'image/webp',
+          label: `Adjunto ${sortOrder + 1}`,
+          sortOrder,
+        },
+      });
+
+      sortOrder += 1;
     }
   }
 

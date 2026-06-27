@@ -7,10 +7,7 @@ export const REDACTED_VALUE = '[REDACTED]';
 
 export const BINARY_REDACTED_PREFIX = '[BINARY_REDACTED';
 
-export const CRITICAL_ACTION_LABELS = {
-  INCIDENT_STATUS_PROCESADO: 'INCIDENT_STATUS_PROCESADO',
-  ACADEMY_MASS_GRADUATION: 'ACADEMY_MASS_GRADUATION',
-} as const;
-
-export type CriticalActionLabel =
-  (typeof CRITICAL_ACTION_LABELS)[keyof typeof CRITICAL_ACTION_LABELS];
+export {
+  CRITICAL_ACTION_LABELS,
+  type CriticalActionLabel,
+} from './audit-taxonomy';

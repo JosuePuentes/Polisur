@@ -1,6 +1,7 @@
 import { RangeRole } from '@prisma/client';
 
 export const SITOP_PERMISSIONS = {
+  ANALYTICS_VIEW: 'analytics.view',
   DASHBOARD_VIEW: 'dashboard.view',
   INCIDENTS_VIEW: 'incidents.view',
   INCIDENTS_CREATE: 'incidents.create',
@@ -18,6 +19,8 @@ export const SITOP_PERMISSIONS = {
   QUADRANTS_MANAGE: 'quadrants.manage',
   PATROL_VIEW: 'patrol.view',
   PATROL_MANAGE: 'patrol.manage',
+  PROCEDURES_VIEW: 'procedures.view',
+  PROCEDURES_MANAGE: 'procedures.manage',
   DETAINEES_VIEW: 'detainees.view',
   DETAINEES_MANAGE: 'detainees.manage',
   SHIFTS_VIEW: 'shifts.view',
@@ -37,6 +40,7 @@ export const ALL_SITOP_PERMISSIONS: SitopPermission[] = Object.values(
 );
 
 export const SITOP_PERMISSION_LABELS: Record<SitopPermission, string> = {
+  [SITOP_PERMISSIONS.ANALYTICS_VIEW]: 'Panel ejecutivo e indicadores',
   [SITOP_PERMISSIONS.DASHBOARD_VIEW]: 'Centro de Mando',
   [SITOP_PERMISSIONS.INCIDENTS_VIEW]: 'Ver incidentes y denuncias',
   [SITOP_PERMISSIONS.INCIDENTS_CREATE]: 'Crear minutas y patrullajes',
@@ -54,6 +58,8 @@ export const SITOP_PERMISSION_LABELS: Record<SitopPermission, string> = {
   [SITOP_PERMISSIONS.QUADRANTS_MANAGE]: 'Gestionar cuadrantes de paz',
   [SITOP_PERMISSIONS.PATROL_VIEW]: 'Ver patrullajes y minutas',
   [SITOP_PERMISSIONS.PATROL_MANAGE]: 'Registrar patrullajes y objetos recuperados',
+  [SITOP_PERMISSIONS.PROCEDURES_VIEW]: 'Ver procedimientos en curso',
+  [SITOP_PERMISSIONS.PROCEDURES_MANAGE]: 'Registrar llegada y cerrar procedimientos',
   [SITOP_PERMISSIONS.DETAINEES_VIEW]: 'Ver detenidos y calabozos',
   [SITOP_PERMISSIONS.DETAINEES_MANAGE]: 'Registrar detenidos y audiencias',
   [SITOP_PERMISSIONS.SHIFTS_VIEW]: 'Ver guardias y funcionarios activos',
@@ -66,6 +72,7 @@ export const SITOP_PERMISSION_LABELS: Record<SitopPermission, string> = {
 };
 
 const JEFE_PERMISSIONS: SitopPermission[] = [
+  SITOP_PERMISSIONS.ANALYTICS_VIEW,
   SITOP_PERMISSIONS.DASHBOARD_VIEW,
   SITOP_PERMISSIONS.INCIDENTS_VIEW,
   SITOP_PERMISSIONS.INCIDENTS_CREATE,
@@ -82,11 +89,14 @@ const JEFE_PERMISSIONS: SitopPermission[] = [
   SITOP_PERMISSIONS.QUADRANTS_VIEW,
   SITOP_PERMISSIONS.PATROL_VIEW,
   SITOP_PERMISSIONS.PATROL_MANAGE,
+  SITOP_PERMISSIONS.PROCEDURES_VIEW,
+  SITOP_PERMISSIONS.PROCEDURES_MANAGE,
   SITOP_PERMISSIONS.DETAINEES_VIEW,
   SITOP_PERMISSIONS.DETAINEES_MANAGE,
   SITOP_PERMISSIONS.SHIFTS_VIEW,
   SITOP_PERMISSIONS.SHIFTS_MANAGE,
   SITOP_PERMISSIONS.LOGISTICS_VIEW,
+  SITOP_PERMISSIONS.LOGISTICS_MANAGE,
   SITOP_PERMISSIONS.ARMORY_VIEW,
   SITOP_PERMISSIONS.ARMORY_MANAGE,
 ];
@@ -99,6 +109,8 @@ const OFICIAL_PERMISSIONS: SitopPermission[] = [
   SITOP_PERMISSIONS.INCIDENTS_EVIDENCE,
   SITOP_PERMISSIONS.PATROL_VIEW,
   SITOP_PERMISSIONS.PATROL_MANAGE,
+  SITOP_PERMISSIONS.PROCEDURES_VIEW,
+  SITOP_PERMISSIONS.PROCEDURES_MANAGE,
   SITOP_PERMISSIONS.DETAINEES_VIEW,
   SITOP_PERMISSIONS.SHIFTS_VIEW,
 ];

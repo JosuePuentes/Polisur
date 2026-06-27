@@ -16,6 +16,50 @@ export const GRADUATED_OFFICER_SELECT = {
   departmentId: true,
   squadId: true,
   promocionId: true,
+  telefono: true,
+  direccion: true,
+  tipoSangre: true,
+  alturaCm: true,
+  pesoKg: true,
+  colorPiel: true,
+  contextura: true,
   createdAt: true,
   updatedAt: true,
 } as const;
+
+export const DISCENTE_LIST_SELECT = {
+  id: true,
+  cedula: true,
+  nombres: true,
+  apellidos: true,
+  telefono: true,
+  direccion: true,
+  tipoSangre: true,
+  alturaCm: true,
+  pesoKg: true,
+  colorPiel: true,
+  contextura: true,
+  _count: { select: { discenteDocuments: true } },
+} as const;
+
+export const BLOOD_TYPES = [
+  'A+',
+  'A-',
+  'B+',
+  'B-',
+  'AB+',
+  'AB-',
+  'O+',
+  'O-',
+] as const;
+
+export const BODY_BUILDS = ['Delgada', 'Promedio', 'Atlética', 'Robusta'] as const;
+
+export const SKIN_COLORS = [
+  'Blanca',
+  'Morena clara',
+  'Morena',
+  'Negra',
+  'Indígena',
+  'Otra',
+] as const;

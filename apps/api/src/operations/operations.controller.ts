@@ -6,13 +6,18 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  Res,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
   AssetType,
   DetaineeStatus,
   PatrolType,
+  VehicleType,
   SITOP_PERMISSIONS,
 } from '@polisur/database';
 import { AuditController } from '../audit/decorators/audit-controller.decorator';
@@ -22,6 +27,7 @@ import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { GetUser } from '../common/decorators/get-user.decorator';
 import { AuthenticatedOfficer } from '../common/interfaces/authenticated-officer.interface';
 import { OperationsService } from './operations.service';
+import { DetaineePhotosInterceptor } from './interceptors/detainee-photos.interceptor';
 
 @ApiTags('Operaciones')
 @ApiBearerAuth('JWT')
@@ -35,6 +41,15 @@ export class OperationsController {
   @RequirePermissions(SITOP_PERMISSIONS.COMMANDS_VIEW)
   listCommands(@GetUser() actor: AuthenticatedOfficer): Promise<unknown[]> {
     return this.operations.listCommands(actor);
+  }
+
+  @Post('commands')
+  @RequirePermissions(SITOP_PERMISSIONS.COMMANDS_MANAGE)
+  createCommand(
+    @GetUser() actor: AuthenticatedOfficer,
+    @Body() body: Parameters<OperationsService['createCommand']>[0],
+  ): Promise<unknown> {
+    return this.operations.createCommand(body, actor);
   }
 
   @Patch('commands/:id')
@@ -93,6 +108,12 @@ export class OperationsController {
       longitude?: number;
       officerIds: string[];
       leaderOfficerId?: string;
+      vehicles?: Array<{
+        plate: string;
+        vehicleType: VehicleType;
+        ownerCedula?: string;
+        notes?: string;
+      }>;
     },
   ): Promise<unknown> {
     return this.operations.createPatrol(actor, body);
@@ -103,7 +124,7 @@ export class OperationsController {
   addRecoveredObject(
     @Param('id') id: string,
     @GetUser() actor: AuthenticatedOfficer,
-    @Body() body: { description: string; quantity?: number; unit?: string; photoUrl?: string },
+    @Body() body: { description: string; quantity?: number; unit?: string; photoUrl?: string; identifier?: string },
   ): Promise<unknown> {
     return this.operations.addRecoveredObject(id, body, actor);
   }
@@ -114,10 +135,42 @@ export class OperationsController {
     return this.operations.heatmapData(actor);
   }
 
+  @Get('detention-cells')
+  @RequirePermissions(SITOP_PERMISSIONS.DETAINEES_VIEW)
+  listDetentionCells(): Promise<unknown[]> {
+    return this.operations.listDetentionCells();
+  }
+
+  @Post('detention-cells')
+  @RequirePermissions(SITOP_PERMISSIONS.DETAINEES_MANAGE)
+  createDetentionCell(
+    @Body() body: { code: string; name: string; block?: string; capacity?: number },
+  ): Promise<unknown> {
+    return this.operations.createDetentionCell(body);
+  }
+
   @Get('detainees')
   @RequirePermissions(SITOP_PERMISSIONS.DETAINEES_VIEW)
-  listDetainees(@Query('status') status?: DetaineeStatus): Promise<unknown[]> {
-    return this.operations.listDetainees(status);
+  listDetainees(
+    @Query('status') status?: DetaineeStatus,
+    @Query('convicted') convicted?: string,
+    @Query('cellId') cellId?: string,
+  ): Promise<unknown[]> {
+    return this.operations.listDetainees({
+      status,
+      convicted:
+        convicted === 'true' ? true : convicted === 'false' ? false : undefined,
+      cellId,
+    });
+  }
+
+  @Get('detainees/files/:filename')
+  @RequirePermissions(SITOP_PERMISSIONS.DETAINEES_VIEW)
+  getDetaineeFile(
+    @Param('filename') filename: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    return this.operations.streamDetaineeFile(filename, res);
   }
 
   @Get('detainees/:id')
@@ -128,8 +181,58 @@ export class OperationsController {
 
   @Post('detainees')
   @RequirePermissions(SITOP_PERMISSIONS.DETAINEES_MANAGE)
-  createDetainee(@Body() body: Parameters<OperationsService['createDetainee']>[0]): Promise<unknown> {
-    return this.operations.createDetainee(body);
+  @UseInterceptors(DetaineePhotosInterceptor())
+  createDetainee(
+    @Body()
+    body: {
+      nombres: string;
+      apellidos: string;
+      cedula?: string;
+      alias?: string;
+      detentionCellId?: string;
+      delitoInicial?: string;
+      incidentId?: string;
+      isConvicted?: string | boolean;
+      sentenceYears?: string | number;
+      notas?: string;
+    },
+    @Req() request: { files?: Record<string, Express.Multer.File[]> },
+  ): Promise<unknown> {
+    return this.operations.createDetainee(
+      {
+        nombres: body.nombres,
+        apellidos: body.apellidos,
+        cedula: body.cedula,
+        alias: body.alias,
+        detentionCellId: body.detentionCellId,
+        delitoInicial: body.delitoInicial,
+        incidentId: body.incidentId,
+        notas: body.notas,
+        isConvicted:
+          body.isConvicted === true ||
+          body.isConvicted === 'true' ||
+          body.isConvicted === '1',
+        sentenceYears: body.sentenceYears
+          ? Number(body.sentenceYears)
+          : undefined,
+      },
+      request.files,
+    );
+  }
+
+  @Patch('detainees/:id')
+  @RequirePermissions(SITOP_PERMISSIONS.DETAINEES_MANAGE)
+  updateDetainee(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      isConvicted?: boolean;
+      sentenceYears?: number | null;
+      detentionCellId?: string | null;
+      notas?: string;
+    },
+  ): Promise<unknown> {
+    return this.operations.updateDetaineeProfile(id, body);
   }
 
   @Post('detainees/:id/hearings')
@@ -159,8 +262,14 @@ export class OperationsController {
     @GetUser() actor: AuthenticatedOfficer,
     @Query('fecha') fecha?: string,
     @Query('departmentId') departmentId?: string,
+    @Query('activeOnly') activeOnly?: string,
   ): Promise<unknown[]> {
-    return this.operations.listShifts(actor, fecha, departmentId);
+    return this.operations.listShifts(
+      actor,
+      fecha,
+      departmentId,
+      activeOnly === 'true' || activeOnly === '1',
+    );
   }
 
   @Get('shifts/roster')
@@ -168,8 +277,9 @@ export class OperationsController {
   activeRoster(
     @GetUser() actor: AuthenticatedOfficer,
     @Query('departmentId') departmentId?: string,
+    @Query('fecha') fecha?: string,
   ): Promise<unknown[]> {
-    return this.operations.activeRoster(actor, departmentId);
+    return this.operations.activeRoster(actor, departmentId, fecha);
   }
 
   @Post('shifts')
@@ -230,7 +340,7 @@ export class OperationsController {
       name: string;
       assetType: AssetType;
       serialNumber?: string;
-      departmentId?: string;
+      departmentId: string;
       notas?: string;
     },
   ): Promise<unknown> {
@@ -242,7 +352,7 @@ export class OperationsController {
   assignInventory(
     @Param('id') id: string,
     @GetUser() actor: AuthenticatedOfficer,
-    @Body() body: { officerId: string; turno: string },
+    @Body() body: { officerId?: string | null; turno?: string },
   ): Promise<unknown> {
     return this.operations.assignInventoryAsset(id, body, actor);
   }

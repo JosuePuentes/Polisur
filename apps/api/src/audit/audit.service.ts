@@ -6,6 +6,10 @@ import {
   PrismaService,
 } from '@polisur/database';
 import { CriticalActionEntry, HttpAuditEntry } from './audit.types';
+import {
+  resolveCriticalAuditDescriptor,
+  resolveHttpAuditDescriptor,
+} from './audit-taxonomy';
 
 type AuditLogInsert = Prisma.AuditLogCreateInput;
 
@@ -26,20 +30,23 @@ export class AuditService {
    * Registra manualmente eventos de alto impacto fuera del ciclo HTTP estándar.
    */
   logCriticalAction(entry: CriticalActionEntry): void {
+    const descriptor = resolveCriticalAuditDescriptor(entry.actionLabel);
     const insert: AuditLogInsert = {
       traceId: crypto.randomUUID(),
       actionKind: AuditActionKind.CRITICAL_ACTION,
       severity: entry.severity ?? AuditSeverity.CRITICAL,
-      actionLabel: entry.actionLabel,
+      actionLabel: descriptor.actionLabel,
       clientIp: entry.clientIp ?? 'system',
       httpMethod: 'INTERNAL',
       endpointUrl: `critical://${entry.actionLabel}`,
       statusCode: 200,
       success: true,
       durationMs: null,
-      metadata: entry.metadata
-        ? (entry.metadata as Prisma.InputJsonValue)
-        : undefined,
+      metadata: {
+        module: descriptor.module,
+        action: descriptor.action,
+        ...(entry.metadata ?? {}),
+      } as Prisma.InputJsonValue,
       officer: {
         connect: { id: entry.officerId },
       },
@@ -50,10 +57,12 @@ export class AuditService {
   }
 
   private buildHttpInsert(entry: HttpAuditEntry): AuditLogInsert {
+    const descriptor = resolveHttpAuditDescriptor(entry.httpMethod, entry.endpointUrl);
     const base: AuditLogInsert = {
       traceId: entry.traceId,
       actionKind: AuditActionKind.HTTP_REQUEST,
       severity: entry.success ? AuditSeverity.INFO : AuditSeverity.WARNING,
+      actionLabel: descriptor?.actionLabel ?? null,
       clientIp: entry.clientIp,
       httpMethod: entry.httpMethod.toUpperCase(),
       endpointUrl: entry.endpointUrl.slice(0, 512),
@@ -71,6 +80,12 @@ export class AuditService {
       durationMs: entry.durationMs,
       errorMessage: entry.errorMessage?.slice(0, 500) ?? undefined,
       rangeRole: entry.rangeRole ?? undefined,
+      metadata: descriptor
+        ? ({
+            module: descriptor.module,
+            action: descriptor.action,
+          } as Prisma.InputJsonValue)
+        : undefined,
     };
 
     if (entry.officerId) {

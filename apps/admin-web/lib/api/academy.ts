@@ -73,6 +73,27 @@ export async function registerDiscente(
   return response.json() as Promise<RegisteredDiscente>;
 }
 
+export async function registerDiscenteForm(formData: FormData): Promise<RegisteredDiscente> {
+  const token = getAccessToken();
+  const response = await fetch(`${API_BASE_URL}/academy/discentes`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+
+  if (response.status === 409) {
+    throw new Error(await parseApiError(response));
+  }
+
+  if (!response.ok) {
+    throw new Error(await parseApiError(response));
+  }
+
+  return response.json() as Promise<RegisteredDiscente>;
+}
+
 export async function graduatePromocion(
   promocionId: string,
 ): Promise<GraduatePromocionResult> {

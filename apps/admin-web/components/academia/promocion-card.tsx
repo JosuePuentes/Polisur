@@ -104,14 +104,26 @@ export function PromocionCard({ promocion, onGraduated }: PromocionCardProps) {
             {promocion.discentes.map((d) => (
               <li
                 key={d.id}
-                className="flex items-center justify-between rounded-lg border border-slate-800/80 bg-slate-950/40 px-3 py-2 text-sm"
+                className="rounded-lg border border-slate-800/80 bg-slate-950/40 px-3 py-3 text-sm"
               >
-                <span className="text-slate-300">
-                  {d.apellidos}, {d.nombres}
-                </span>
-                <span className="font-mono text-xs text-slate-500">
-                  {d.cedula}
-                </span>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <span className="font-medium text-slate-200">
+                    {d.apellidos}, {d.nombres}
+                  </span>
+                  <span className="font-mono text-xs text-slate-500">{d.cedula}</span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  {d.telefono ? `Tlf. ${d.telefono}` : 'Sin teléfono'}
+                  {d.tipoSangre ? ` · Sangre ${d.tipoSangre}` : ''}
+                  {d.alturaCm ? ` · ${d.alturaCm} cm` : ''}
+                  {d.pesoKg ? ` · ${d.pesoKg} kg` : ''}
+                  {d.colorPiel ? ` · ${d.colorPiel}` : ''}
+                  {d.contextura ? ` · ${d.contextura}` : ''}
+                </p>
+                <p className="mt-1 text-xs text-cyan-300/80">
+                  {d._count.discenteDocuments} adjunto(s) en expediente
+                  {d.direccion ? ` · ${d.direccion}` : ''}
+                </p>
               </li>
             ))}
           </ul>

@@ -86,6 +86,9 @@ export interface CreateIncidentPayload {
   descripcion: string;
   departmentId: string;
   squadId: string;
+  subjectCedula?: string;
+  vehiclePlate?: string;
+  vehicleType?: string;
 }
 
 export interface CreateRadioDispatchPayload extends CreateIncidentPayload {

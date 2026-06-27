@@ -49,3 +49,36 @@ function inferCuadranteCoordinates(cuadrante: string): [number, number] {
     SAN_FRANCISCO_CENTER.lng + offsetLng,
   ];
 }
+
+export function resolveCuadranteCenter(cuadrante: string): [number, number] {
+  return (
+    CUADRANTE_COORDINATES[cuadrante] ?? inferCuadranteCoordinates(cuadrante)
+  );
+}
+
+export function resolvePatrolOrigin(
+  patrol: {
+    latitude?: number | null;
+    longitude?: number | null;
+    cuadrante: string;
+  },
+  index: number,
+): [number, number] {
+  if (
+    typeof patrol.latitude === 'number' &&
+    typeof patrol.longitude === 'number'
+  ) {
+    return [patrol.latitude, patrol.longitude];
+  }
+
+  const base = resolveCuadranteCenter(patrol.cuadrante);
+  const ring = Math.floor(index / 4);
+  const slot = index % 4;
+  const angle = (slot / 4) * Math.PI * 2;
+  const radius = 0.0005 + ring * 0.0003;
+
+  return [
+    base[0] + Math.cos(angle) * radius,
+    base[1] + Math.sin(angle) * radius,
+  ];
+}

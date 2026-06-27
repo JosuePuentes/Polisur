@@ -5,6 +5,7 @@ import { getSession } from '@/lib/auth';
 import { hasPermission, SITOP_PERMISSIONS } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { resolveHomeRoute } from '@/lib/utils/home-route';
 
 export default function AuditoriaPage() {
   const session = getSession();
@@ -16,7 +17,7 @@ export default function AuditoriaPage() {
       return;
     }
     if (!hasPermission(session.permissions, SITOP_PERMISSIONS.AUDIT_VIEW)) {
-      router.replace('/dashboard');
+      router.replace(resolveHomeRoute(session.permissions));
     }
   }, [session, router]);
 

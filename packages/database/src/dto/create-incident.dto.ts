@@ -1,9 +1,12 @@
 import {
+  IsEnum,
   IsNotEmpty,
+  IsOptional,
   IsString,
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { VehicleType } from '@prisma/client';
 
 export class CreateIncidentDto {
   @IsString()
@@ -33,4 +36,18 @@ export class CreateIncidentDto {
   @IsString()
   @IsNotEmpty()
   squadId!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  subjectCedula?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  vehiclePlate?: string;
+
+  @IsOptional()
+  @IsEnum(VehicleType)
+  vehicleType?: VehicleType;
 }

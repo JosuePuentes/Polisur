@@ -1,14 +1,13 @@
 import { Officer, Prisma, Promocion } from '@polisur/database';
-import { GRADUATED_OFFICER_SELECT } from './constants/academy.constants';
+import { GRADUATED_OFFICER_SELECT, DISCENTE_LIST_SELECT } from './constants/academy.constants';
 
 export type GraduatedOfficer = Prisma.OfficerGetPayload<{
   select: typeof GRADUATED_OFFICER_SELECT;
 }>;
 
-export type PromocionDiscente = Pick<
-  GraduatedOfficer,
-  'id' | 'cedula' | 'nombres' | 'apellidos'
->;
+export type PromocionDiscente = Prisma.OfficerGetPayload<{
+  select: typeof DISCENTE_LIST_SELECT;
+}>;
 
 export interface PromocionWithDiscentes extends Promocion {
   discentes: PromocionDiscente[];
