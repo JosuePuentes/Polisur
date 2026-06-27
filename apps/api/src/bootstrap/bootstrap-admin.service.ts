@@ -122,24 +122,40 @@ export class BootstrapAdminService {
   }
 
   async ensurePeaceQuadrants(): Promise<void> {
-    const quadrantCount = await this.prisma.peaceQuadrant.count();
-    if (quadrantCount > 0) {
-      return;
-    }
-
     for (const seed of DEFAULT_PEACE_QUADRANTS) {
-      await this.prisma.peaceQuadrant.create({
-        data: {
+      await this.prisma.peaceQuadrant.upsert({
+        where: { code: seed.code },
+        create: {
           code: seed.code,
+          quadrantNumber: seed.quadrantNumber,
           name: seed.name,
           parroquia: seed.parroquia,
+          comuna: seed.comuna,
           centerLat: seed.centerLat,
           centerLng: seed.centerLng,
           boundaryPolygon: seed.boundaryPolygon,
         },
+        update: {
+          quadrantNumber: seed.quadrantNumber,
+          name: seed.name,
+          parroquia: seed.parroquia,
+          comuna: seed.comuna,
+          centerLat: seed.centerLat,
+          centerLng: seed.centerLng,
+          boundaryPolygon: seed.boundaryPolygon,
+          isActive: true,
+        },
       });
     }
 
-    this.logger.log('Cuadrantes de Paz iniciales creados (8 zonas georreferenciadas)');
+    const officialCodes = DEFAULT_PEACE_QUADRANTS.map((q) => q.code);
+    await this.prisma.peaceQuadrant.updateMany({
+      where: { code: { notIn: officialCodes } },
+      data: { isActive: false },
+    });
+
+    this.logger.log(
+      `Cuadrantes de Paz sincronizados (${DEFAULT_PEACE_QUADRANTS.length} zonas oficiales)`,
+    );
   }
 }

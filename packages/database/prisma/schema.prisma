@@ -261,6 +261,7 @@ model Officer {
   assignedInventory    InventoryAsset[]      @relation("InventoryAssignee")
   detaineeRecords      DetaineeRecord[]
   discenteDocuments    DiscenteDocument[]
+  assignedPeaceQuadrants PeaceQuadrant[] @relation("PeaceQuadrantAssignee")
 
   @@map("officers")
 }
@@ -429,8 +430,10 @@ model ControlPoint {
 model PeaceQuadrant {
   id               String   @id @default(cuid())
   code             String   @unique @db.VarChar(24)
+  quadrantNumber   Int?
   name             String   @db.VarChar(80)
   parroquia        String   @db.VarChar(80)
+  comuna           String?  @db.VarChar(120)
   centerLat        Float?
   centerLng        Float?
   /// Vértices [[lat, lng], ...] del perímetro que abarca el cuadrante
@@ -439,7 +442,12 @@ model PeaceQuadrant {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  assignedOfficerId String?
+  assignedOfficer   Officer? @relation("PeaceQuadrantAssignee", fields: [assignedOfficerId], references: [id], onDelete: SetNull)
+
   @@index([parroquia], map: "idx_peace_quadrant_parroquia_btree")
+  @@index([quadrantNumber], map: "idx_peace_quadrant_number_btree")
+  @@index([assignedOfficerId], map: "idx_peace_quadrant_officer_btree")
   @@map("peace_quadrants")
 }
 

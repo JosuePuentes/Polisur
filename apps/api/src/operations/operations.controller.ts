@@ -83,6 +83,16 @@ export class OperationsController {
     return this.operations.createQuadrant(body);
   }
 
+  @Patch('quadrants/:id/assign')
+  @RequirePermissions(SITOP_PERMISSIONS.QUADRANTS_MANAGE)
+  assignQuadrantOfficer(
+    @GetUser() actor: AuthenticatedOfficer,
+    @Param('id') id: string,
+    @Body() body: { officerId?: string | null },
+  ): Promise<unknown> {
+    return this.operations.assignQuadrantOfficer(id, body.officerId ?? null, actor);
+  }
+
   @Get('patrols')
   @RequirePermissions(SITOP_PERMISSIONS.PATROL_VIEW)
   listPatrols(

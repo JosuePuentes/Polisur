@@ -22,11 +22,21 @@ import {
 export interface PeaceQuadrantMapRecord {
   id: string;
   code: string;
+  quadrantNumber: number | null;
   name: string;
   parroquia: string;
+  comuna: string | null;
   centerLat: number | null;
   centerLng: number | null;
   boundaryPolygon: [number, number][] | null;
+  assignedOfficer: {
+    id: string;
+    nombres: string;
+    apellidos: string;
+    cedula: string;
+    grado: string | null;
+    department: { name: string; code: string };
+  } | null;
 }
 
 const ZONE_COLORS = [
@@ -38,6 +48,8 @@ const ZONE_COLORS = [
   '#60a5fa',
   '#f472b6',
   '#4ade80',
+  '#f97316',
+  '#c084fc',
 ] as const;
 
 const DRAFT_STYLE = {
@@ -156,9 +168,20 @@ export function PeaceQuadrantsMap({
                 }
               >
                 <Popup>
-                  <div className="min-w-[180px] space-y-1 text-slate-800">
+                  <div className="min-w-[200px] space-y-1 text-slate-800">
                     <p className="font-semibold">{quadrant.name}</p>
                     <p className="text-xs">{quadrant.code} · {quadrant.parroquia}</p>
+                    {quadrant.comuna && (
+                      <p className="text-xs text-slate-600">Comuna: {quadrant.comuna}</p>
+                    )}
+                    {quadrant.assignedOfficer ? (
+                      <p className="text-xs text-emerald-700">
+                        Asignado: {quadrant.assignedOfficer.grado ?? 'Func.'}{' '}
+                        {quadrant.assignedOfficer.nombres} {quadrant.assignedOfficer.apellidos}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-700">Sin funcionario asignado</p>
+                    )}
                   </div>
                 </Popup>
               </Polygon>

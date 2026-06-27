@@ -1,21 +1,22 @@
 /** Centro geográfico: Municipio San Francisco, Estado Zulia, Venezuela */
 export const SAN_FRANCISCO_CENTER = {
-  lat: 10.5579,
-  lng: -71.633,
+  lat: 10.545,
+  lng: -71.665,
 } as const;
 
-export const DEFAULT_MAP_ZOOM = 14;
+export const DEFAULT_MAP_ZOOM = 13;
 
-/** Coordenadas operativas por Cuadrante de Paz */
+/** Coordenadas centrales de los cuadrantes oficiales C-xxx */
 export const CUADRANTE_COORDINATES: Record<string, [number, number]> = {
-  'Cuadrante de Paz 01': [10.565, -71.645],
-  'Cuadrante de Paz 02': [10.562, -71.628],
-  'Cuadrante de Paz 03': [10.554, -71.642],
-  'Cuadrante de Paz 04': [10.551, -71.621],
+  'Cuadrante de Paz 01': [10.563, -71.639],
   'Cuadrante de Paz 05': [10.548, -71.635],
-  'Cuadrante de Paz 06': [10.561, -71.618],
-  'Cuadrante de Paz 07': [10.543, -71.648],
-  'Cuadrante de Paz 08': [10.568, -71.632],
+  'Cuadrante de Paz 12 · Despertar de un Pueblo': [10.533, -71.667],
+  'Cuadrante de Paz 12 · Los Sueños del Gigante': [10.551, -71.666],
+  'Cuadrante de Paz 13': [10.553, -71.673],
+  'Cuadrante de Paz 14': [10.54, -71.68],
+  'Cuadrante de Paz 15': [10.52, -71.683],
+  'Cuadrante de Paz 16': [10.523, -71.698],
+  'Cuadrante de Paz 18': [10.577, -71.658],
 };
 
 export const DARK_MATTER_TILE_URL =

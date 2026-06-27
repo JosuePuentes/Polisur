@@ -149,7 +149,65 @@ export class OperationsService {
   listQuadrants(): Promise<unknown[]> {
     return this.prisma.peaceQuadrant.findMany({
       where: { isActive: true },
-      orderBy: { code: 'asc' },
+      orderBy: [{ quadrantNumber: 'asc' }, { code: 'asc' }],
+      include: {
+        assignedOfficer: {
+          select: {
+            id: true,
+            nombres: true,
+            apellidos: true,
+            cedula: true,
+            grado: true,
+            department: { select: { name: true, code: true } },
+          },
+        },
+      },
+    });
+  }
+
+  async assignQuadrantOfficer(
+    quadrantId: string,
+    officerId: string | null,
+    _actor: AuthenticatedOfficer,
+  ): Promise<unknown> {
+    const quadrant = await this.prisma.peaceQuadrant.findUnique({
+      where: { id: quadrantId },
+    });
+    if (!quadrant) {
+      throw new NotFoundException('Cuadrante no encontrado');
+    }
+
+    if (officerId) {
+      const officer = await this.prisma.officer.findUnique({
+        where: { id: officerId },
+        select: { id: true, isSuspended: true, rangeRole: true },
+      });
+      if (!officer) {
+        throw new BadRequestException('Funcionario no encontrado en RRHH');
+      }
+      if (officer.isSuspended) {
+        throw new BadRequestException('No puede asignar un funcionario suspendido');
+      }
+      if (officer.rangeRole === RangeRole.DISCENTE) {
+        throw new BadRequestException('Los discentes no pueden ser asignados a cuadrantes');
+      }
+    }
+
+    return this.prisma.peaceQuadrant.update({
+      where: { id: quadrantId },
+      data: { assignedOfficerId: officerId },
+      include: {
+        assignedOfficer: {
+          select: {
+            id: true,
+            nombres: true,
+            apellidos: true,
+            cedula: true,
+            grado: true,
+            department: { select: { name: true, code: true } },
+          },
+        },
+      },
     });
   }
 
@@ -157,6 +215,8 @@ export class OperationsService {
     code: string;
     name: string;
     parroquia: string;
+    comuna?: string;
+    quadrantNumber?: number;
     centerLat?: number;
     centerLng?: number;
     boundaryPolygon: [number, number][];
@@ -187,11 +247,25 @@ export class OperationsService {
     return this.prisma.peaceQuadrant.create({
       data: {
         code,
+        quadrantNumber: data.quadrantNumber,
         name,
         parroquia: data.parroquia.trim(),
+        comuna: data.comuna?.trim() || undefined,
         centerLat: center.lat,
         centerLng: center.lng,
         boundaryPolygon: polygon,
+      },
+      include: {
+        assignedOfficer: {
+          select: {
+            id: true,
+            nombres: true,
+            apellidos: true,
+            cedula: true,
+            grado: true,
+            department: { select: { name: true, code: true } },
+          },
+        },
       },
     });
   }

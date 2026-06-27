@@ -1,5 +1,10 @@
 export const PARROQUIAS_SAN_FRANCISCO = [
   'San Francisco',
+  'Francisco Ochoa',
+  'Domitila Flores',
+  'José Domingo Rus',
+  'Los Cortijos',
+  'Marcial Hernández',
   'El Bajo',
   'La Paz',
   'Jesús María Semprún',
@@ -17,12 +22,13 @@ export const TIPOS_DELITO_PUBLICOS = [
 
 export const SECTORES_REFERENCIA = [
   'Cuadrante de Paz 01',
-  'Cuadrante de Paz 02',
-  'Cuadrante de Paz 03',
-  'Cuadrante de Paz 04',
   'Cuadrante de Paz 05',
-  'Cuadrante de Paz 06',
-  'Cuadrante de Paz 07',
-  'Cuadrante de Paz 08',
+  'Cuadrante de Paz 12 · Despertar de un Pueblo',
+  'Cuadrante de Paz 12 · Los Sueños del Gigante',
+  'Cuadrante de Paz 13',
+  'Cuadrante de Paz 14',
+  'Cuadrante de Paz 15',
+  'Cuadrante de Paz 16',
+  'Cuadrante de Paz 18',
   'Otro sector (especificar en descripción)',
 ] as const;

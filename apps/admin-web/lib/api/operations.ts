@@ -44,17 +44,34 @@ export const opsApi = {
       Array<{
         id: string;
         code: string;
+        quadrantNumber: number | null;
         name: string;
         parroquia: string;
+        comuna: string | null;
         centerLat: number | null;
         centerLng: number | null;
         boundaryPolygon: [number, number][] | null;
+        assignedOfficer: {
+          id: string;
+          nombres: string;
+          apellidos: string;
+          cedula: string;
+          grado: string | null;
+          department: { name: string; code: string };
+        } | null;
       }>
     >('/quadrants'),
+  assignQuadrantOfficer: (id: string, officerId: string | null) =>
+    api(`/quadrants/${id}/assign`, {
+      method: 'PATCH',
+      body: JSON.stringify({ officerId }),
+    }),
   createQuadrant: (body: {
     code: string;
     name: string;
     parroquia: string;
+    comuna?: string;
+    quadrantNumber?: number;
     centerLat?: number;
     centerLng?: number;
     boundaryPolygon: [number, number][];

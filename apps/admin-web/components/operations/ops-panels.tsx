@@ -1026,13 +1026,17 @@ export function QuadrantsPanel() {
   const defaultNames = SECTORES_REFERENCIA.filter((s) => s.startsWith('Cuadrante de Paz'));
 
   const [list, setList] = useState<PeaceQuadrantMapRecord[]>([]);
+  const [officers, setOfficers] = useState<
+    Array<{ id: string; nombres: string; apellidos: string; cedula: string; grado?: string | null }>
+  >([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [assignOfficerId, setAssignOfficerId] = useState('');
   const [drawMode, setDrawMode] = useState(false);
   const [draftPolygon, setDraftPolygon] = useState<[number, number][]>([]);
   const [msg, setMsg] = useState('');
   const [form, setForm] = useState({
     name: defaultNames[0] as string,
-    code: 'CP-01',
+    code: 'C-201',
     parroquia: PARROQUIAS_SAN_FRANCISCO[0] as string,
     customName: '',
   });
@@ -1048,12 +1052,20 @@ export function QuadrantsPanel() {
 
   useEffect(() => {
     reload();
+    void searchOfficers().then((rows) => setOfficers(rows as typeof officers));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const selected = list.find((q) => q.id === selectedId);
+    setAssignOfficerId(selected?.assignedOfficer?.id ?? '');
+  }, [selectedId, list]);
+
   function codeFromName(name: string): string {
+    const catalog = list.find((q) => q.name === name);
+    if (catalog) return catalog.code;
     const match = name.match(/(\d+)/);
-    return match ? `CP-${match[1].padStart(2, '0')}` : name.slice(0, 8).toUpperCase();
+    return match ? `C-${match[1].padStart(3, '0')}` : name.slice(0, 8).toUpperCase();
   }
 
   function handleNameChange(name: string) {
@@ -1106,23 +1118,88 @@ export function QuadrantsPanel() {
                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
             }`}
           >
-            {q.name.replace('Cuadrante de Paz ', 'CP-')}
+            {q.code}
+            {q.assignedOfficer ? ' ✓' : ''}
           </button>
         ))}
       </div>
 
       {selected && (
-        <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-300">
-          <h2 className="font-semibold text-slate-100">{selected.name}</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            {selected.code} · {selected.parroquia}
-            {selected.centerLat != null && selected.centerLng != null
-              ? ` · Centro ${selected.centerLat.toFixed(5)}, ${selected.centerLng.toFixed(5)}`
-              : ''}
-          </p>
-          <p className="mt-2 text-xs text-slate-400">
-            Zona delimitada con {(selected.boundaryPolygon?.length ?? 0)} puntos en el mapa.
-          </p>
+        <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-300 space-y-3">
+          <div>
+            <h2 className="font-semibold text-slate-100">{selected.name}</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              {selected.code}
+              {selected.quadrantNumber != null ? ` · Nº ${selected.quadrantNumber}` : ''}
+              {' · '}
+              {selected.parroquia}
+            </p>
+            {selected.comuna && (
+              <p className="mt-1 text-xs text-cyan-300/80">Comuna: {selected.comuna}</p>
+            )}
+            {selected.centerLat != null && selected.centerLng != null && (
+              <p className="mt-1 font-mono text-[10px] text-slate-600">
+                Centro {selected.centerLat.toFixed(5)}, {selected.centerLng.toFixed(5)}
+              </p>
+            )}
+            <p className="mt-2 text-xs text-slate-400">
+              Perímetro con {(selected.boundaryPolygon?.length ?? 0)} vértices en el mapa.
+            </p>
+          </div>
+
+          <div className="border-t border-slate-800 pt-3">
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+              Funcionario asignado
+            </p>
+            {selected.assignedOfficer ? (
+              <p className="mt-1 text-sm text-emerald-300">
+                {selected.assignedOfficer.grado ?? 'Funcionario'}{' '}
+                {selected.assignedOfficer.nombres} {selected.assignedOfficer.apellidos}
+                <span className="block text-xs text-slate-500">
+                  CI {selected.assignedOfficer.cedula} · {selected.assignedOfficer.department.name}
+                </span>
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-amber-400/90">Sin asignación — seleccione un funcionario de RRHH</p>
+            )}
+
+            {canManage && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <select
+                  className={inputCls + ' max-w-md'}
+                  value={assignOfficerId}
+                  onChange={(e) => setAssignOfficerId(e.target.value)}
+                >
+                  <option value="">Sin asignar</option>
+                  {officers.map((officer) => (
+                    <option key={officer.id} value={officer.id}>
+                      {officer.grado ? `${officer.grado} ` : ''}
+                      {officer.nombres} {officer.apellidos} ({officer.cedula})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className={btnCls}
+                  onClick={() => {
+                    void opsApi
+                      .assignQuadrantOfficer(selected.id, assignOfficerId || null)
+                      .then(() => {
+                        setMsg(
+                          assignOfficerId
+                            ? 'Funcionario asignado al cuadrante'
+                            : 'Asignación removida del cuadrante',
+                        );
+                        reload();
+                      })
+                      .catch((err: Error) => setMsg(err.message));
+                  }}
+                >
+                  Guardar asignación
+                </button>
+              </div>
+            )}
+          </div>
         </section>
       )}
 
@@ -1154,7 +1231,7 @@ export function QuadrantsPanel() {
                 resetDraft();
                 setForm({
                   name: defaultNames[0] as string,
-                  code: 'CP-01',
+                  code: 'C-201',
                   parroquia: PARROQUIAS_SAN_FRANCISCO[0] as string,
                   customName: '',
                 });
