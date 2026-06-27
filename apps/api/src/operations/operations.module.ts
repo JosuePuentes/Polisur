@@ -8,6 +8,6 @@ import { DetaineeStorageService } from './services/detainee-storage.service';
   imports: [IncidentsModule],
   controllers: [OperationsController],
   providers: [OperationsService, DetaineeStorageService],
-  exports: [OperationsService, DetaineeStorageService],
+  exports: [OperationsService, DetaineeStorageService, IncidentsModule],
 })
 export class OperationsModule {}
