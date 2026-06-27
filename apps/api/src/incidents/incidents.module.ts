@@ -16,6 +16,6 @@ import { ImageProcessorService } from './services/image-processor.service';
     ImageProcessorService,
     EvidenceStorageService,
   ],
-  exports: [IncidentsService, EvidenceStorageService],
+  exports: [IncidentsService, EvidenceStorageService, ImageProcessorService],
 })
 export class IncidentsModule {}
