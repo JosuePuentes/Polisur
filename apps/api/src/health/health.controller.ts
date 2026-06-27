@@ -24,6 +24,7 @@ export class HealthController {
   }
 
   private async checkEvidenceStorage(): Promise<HealthIndicatorResult> {
+    await this.evidenceStorage.ensureStorageReady();
     const disk = await this.evidenceStorage.getHealth();
     const isProd = process.env.NODE_ENV === 'production';
 

@@ -2,11 +2,11 @@ import {
   BadRequestException,
   Injectable,
   Logger,
-  OnModuleInit,
 } from '@nestjs/common';
 import { access, constants, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { withTimeout } from '../../common/utils/async-timeout.util';
 import { EVIDENCE_FILENAME_PATTERN } from './image-processor.constants';
 
 export interface EvidenceStorageHealth {
@@ -17,6 +17,7 @@ export interface EvidenceStorageHealth {
 }
 
 const PERSISTENT_MOUNT_PREFIX = '/var/data';
+const MKDIR_TIMEOUT_MS = Number(process.env.EVIDENCE_MKDIR_TIMEOUT_MS ?? 5_000);
 
 function resolveFallbackStorageDir(): string {
   return join(process.cwd(), 'uploads', 'evidence');
@@ -27,7 +28,7 @@ function isPersistentPath(path: string): boolean {
 }
 
 @Injectable()
-export class EvidenceStorageService implements OnModuleInit {
+export class EvidenceStorageService {
   private readonly logger = new Logger(EvidenceStorageService.name);
 
   private readonly preferredStorageDir =
@@ -39,16 +40,20 @@ export class EvidenceStorageService implements OnModuleInit {
 
   private storageDir = resolveFallbackStorageDir();
   private writable = false;
+  private initPromise: Promise<void> | null = null;
 
   getStorageDir(): string {
     return this.storageDir;
   }
 
-  async onModuleInit(): Promise<void> {
-    await this.ensureStorageReady();
+  ensureStorageReady(): Promise<void> {
+    if (!this.initPromise) {
+      this.initPromise = this.prepareStorage();
+    }
+    return this.initPromise;
   }
 
-  async ensureStorageReady(): Promise<void> {
+  private async prepareStorage(): Promise<void> {
     const fallbackDir = resolveFallbackStorageDir();
     const candidates = [
       this.preferredStorageDir,
@@ -57,7 +62,11 @@ export class EvidenceStorageService implements OnModuleInit {
 
     for (const candidate of candidates) {
       try {
-        await mkdir(candidate, { recursive: true });
+        await withTimeout(
+          mkdir(candidate, { recursive: true }),
+          MKDIR_TIMEOUT_MS,
+          `mkdir ${candidate}`,
+        );
         await access(candidate, constants.W_OK | constants.R_OK);
         this.storageDir = candidate;
         this.writable = true;
@@ -144,6 +153,7 @@ export class EvidenceStorageService implements OnModuleInit {
     buffer: Buffer,
     incidentId: string,
   ): Promise<string> {
+    await this.ensureStorageReady();
     this.assertWritable();
     await mkdir(this.storageDir, { recursive: true });
 

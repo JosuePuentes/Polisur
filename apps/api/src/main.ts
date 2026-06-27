@@ -3,8 +3,15 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { BootstrapAdminService } from './bootstrap/bootstrap-admin.service';
+import { EvidenceStorageService } from './incidents/services/evidence-storage.service';
 
 async function bootstrap(): Promise<void> {
+  const port = Number(process.env.PORT ?? 3001);
+  console.log(
+    `[sitop] Arranque (NODE_ENV=${process.env.NODE_ENV ?? 'development'}, PORT=${port})`,
+  );
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.useGlobalPipes(
@@ -54,8 +61,18 @@ async function bootstrap(): Promise<void> {
     credentials: true,
   });
 
-  const port = Number(process.env.PORT ?? 3001);
   await app.listen(port, '0.0.0.0');
+  console.log(`[sitop] API escuchando en 0.0.0.0:${port}`);
+
+  const evidenceStorage = app.get(EvidenceStorageService);
+  void evidenceStorage.ensureStorageReady();
+
+  const bootstrapAdmin = app.get(BootstrapAdminService);
+  void bootstrapAdmin.runBootstrap();
 }
 
-void bootstrap();
+void bootstrap().catch((error: unknown) => {
+  const message = error instanceof Error ? error.stack ?? error.message : String(error);
+  console.error('[sitop] Error fatal al arrancar:', message);
+  process.exit(1);
+});

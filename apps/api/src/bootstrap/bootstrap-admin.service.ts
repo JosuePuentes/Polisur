@@ -1,16 +1,16 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService, RangeRole } from '@polisur/database';
 import * as bcrypt from 'bcrypt';
 
 const BCRYPT_ROUNDS = 12;
 
 @Injectable()
-export class BootstrapAdminService implements OnModuleInit {
+export class BootstrapAdminService {
   private readonly logger = new Logger(BootstrapAdminService.name);
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async onModuleInit(): Promise<void> {
+  async runBootstrap(): Promise<void> {
     await this.ensureOrganizationalStructure();
 
     const cedula = process.env.BOOTSTRAP_CEDULA?.trim();

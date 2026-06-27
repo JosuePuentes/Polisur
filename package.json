@@ -5,6 +5,7 @@
   "description": "Monorepo SITOP / DAET — Polisur",
   "scripts": {
     "build": "npm run build --prefix packages/database && npm run build --prefix apps/api && npm run build --prefix apps/admin-web",
+    "start": "sh scripts/start-api.sh",
     "build:database": "npm run build --prefix packages/database",
     "build:api": "npm run build --prefix apps/api",
     "build:web": "npm run build --prefix apps/admin-web",
