@@ -10,7 +10,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/centro-mando', label: 'Centro de Mando', permission: SITOP_PERMISSIONS.DASHBOARD_VIEW },
   { href: '/dashboard/patrullaje', label: 'Patrullaje / Minutas', permission: SITOP_PERMISSIONS.PATROL_VIEW },
   { href: '/dashboard/procedimientos', label: 'Procedimientos en curso', permission: SITOP_PERMISSIONS.PROCEDURES_VIEW },
-  { href: '/dashboard/detenidos', label: 'Detenidos', permission: SITOP_PERMISSIONS.DETAINEES_VIEW },
+  { href: '/dashboard/detenidos', label: 'Calabozos', permission: SITOP_PERMISSIONS.DETAINEES_VIEW },
   { href: '/dashboard/guardias', label: 'Guardias Activas', permission: SITOP_PERMISSIONS.SHIFTS_VIEW },
   { href: '/dashboard/movil', label: 'App Móvil / GPS', permission: SITOP_PERMISSIONS.SHIFTS_VIEW },
   { href: '/dashboard/comandos', label: 'Comandos', permission: SITOP_PERMISSIONS.COMMANDS_VIEW },

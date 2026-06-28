@@ -1,5 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { DEFAULT_PEACE_QUADRANTS, PrismaService, RangeRole } from '@polisur/database';
+import {
+  DEFAULT_MINUTE_ASUNTOS,
+  DEFAULT_MINUTE_CONCEPTOS,
+  DEFAULT_MINUTE_HEADER_LINES,
+  DEFAULT_MINUTE_LEMA,
+  DEFAULT_MINUTE_RESEÑA_PREFIX,
+  DEFAULT_PEACE_QUADRANTS,
+  MinuteCatalogKind,
+  PrismaService,
+  RangeRole,
+} from '@polisur/database';
 import * as bcrypt from 'bcrypt';
 
 const BCRYPT_ROUNDS = 12;
@@ -13,6 +23,8 @@ export class BootstrapAdminService {
   async runBootstrap(): Promise<void> {
     await this.ensureOrganizationalStructure();
     await this.ensurePeaceQuadrants();
+    await this.ensureMinuteCatalog();
+    await this.ensureDepartmentMinuteDefaults();
 
     const cedula = process.env.BOOTSTRAP_CEDULA?.trim();
     const password = process.env.BOOTSTRAP_PASSWORD;
@@ -157,5 +169,44 @@ export class BootstrapAdminService {
     this.logger.log(
       `Cuadrantes de Paz sincronizados (${DEFAULT_PEACE_QUADRANTS.length} zonas oficiales)`,
     );
+  }
+
+  async ensureMinuteCatalog(): Promise<void> {
+    for (const label of DEFAULT_MINUTE_CONCEPTOS) {
+      await this.prisma.minuteCatalogEntry.upsert({
+        where: { kind_label: { kind: MinuteCatalogKind.CONCEPTO, label } },
+        create: { kind: MinuteCatalogKind.CONCEPTO, label },
+        update: { isActive: true },
+      });
+    }
+    for (const label of DEFAULT_MINUTE_ASUNTOS) {
+      await this.prisma.minuteCatalogEntry.upsert({
+        where: { kind_label: { kind: MinuteCatalogKind.ASUNTO, label } },
+        create: { kind: MinuteCatalogKind.ASUNTO, label },
+        update: { isActive: true },
+      });
+    }
+    this.logger.log('Catálogo de conceptos y asuntos de minutas sincronizado');
+  }
+
+  async ensureDepartmentMinuteDefaults(): Promise<void> {
+    const departments = await this.prisma.department.findMany({
+      select: { id: true, name: true, minuteHeaderLines: true, minuteReseñaPrefix: true, minuteLema: true },
+    });
+
+    for (const dept of departments) {
+      const headerLines = Array.isArray(dept.minuteHeaderLines)
+        ? (dept.minuteHeaderLines as string[])
+        : null;
+
+      await this.prisma.department.update({
+        where: { id: dept.id },
+        data: {
+          minuteHeaderLines: headerLines ?? [...DEFAULT_MINUTE_HEADER_LINES, dept.name],
+          minuteReseñaPrefix: dept.minuteReseñaPrefix ?? DEFAULT_MINUTE_RESEÑA_PREFIX,
+          minuteLema: dept.minuteLema ?? DEFAULT_MINUTE_LEMA.join('\n'),
+        },
+      });
+    }
   }
 }

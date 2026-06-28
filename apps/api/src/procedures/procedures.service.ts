@@ -76,7 +76,7 @@ export class ProceduresService {
     const scopedDept = resolveScopedDepartmentId(actor);
     const statusFilter =
       scope === 'active'
-        ? { in: [ProcedureStatus.EN_CURSO, ProcedureStatus.PENDIENTE_CIERRE] }
+        ? { in: [ProcedureStatus.EN_CURSO, ProcedureStatus.PENDIENTE_CIERRE, ProcedureStatus.PENDIENTE_FIJACION] }
         : scope === 'completed'
           ? { in: [ProcedureStatus.SIN_NOVEDAD, ProcedureStatus.EXITOSO] }
           : undefined;
@@ -105,6 +105,8 @@ export class ProceduresService {
       longitude?: number;
       bringsDetainee: boolean;
       bringsObjects: boolean;
+      bringsVehicles?: boolean;
+      bringsPersons?: boolean;
       officerIds: string[];
       leaderOfficerId?: string;
       vehicles?: Array<{
@@ -138,7 +140,7 @@ export class ProceduresService {
     }
 
     const mergedNarrative = [
-      '--- MINUTA DE SALIDA ---',
+      departure.reseñaPrefix ? `${departure.reseñaPrefix}\n` : '',
       departure.descripcion,
       '',
       '--- MINUTA DE LLEGADA ---',
@@ -190,6 +192,8 @@ export class ProceduresService {
           arrivalMinuteId: arrivalMinute.id,
           bringsDetainee: data.bringsDetainee,
           bringsObjects: data.bringsObjects,
+          bringsVehicles: data.bringsVehicles ?? false,
+          bringsPersons: data.bringsPersons ?? false,
           mergedNarrative,
         },
         include: PROCEDURE_INCLUDE,
@@ -209,6 +213,7 @@ export class ProceduresService {
       alias?: string;
       delitoInicial?: string;
       objectDescription?: string;
+      fijacionCompleta?: boolean;
     },
     files?: Record<string, Express.Multer.File[]>,
   ): Promise<unknown> {
@@ -282,9 +287,8 @@ export class ProceduresService {
         ? Object.keys(DETAINEE_PHOTO_FIELD_MAP).filter((field) => files[field]?.[0]?.buffer)
             .length
         : 0;
-      if (uploadedPhotoCount < 6) {
-        throw new BadRequestException('Debe adjuntar al menos 6 fotografías de fijación');
-      }
+      const needsMoreFijacion =
+        !data.fijacionCompleta || uploadedPhotoCount < 6;
 
       const notas = [
         procedure.mergedNarrative ?? '',
@@ -311,18 +315,21 @@ export class ProceduresService {
           },
         });
 
-        if (files) {
+        if (files && uploadedPhotoCount > 0) {
           await this.persistDetaineePhotos(detainee.id, files);
         }
 
         return tx.procedure.update({
           where: { id: procedureId },
           data: {
-            status: ProcedureStatus.EXITOSO,
+            status: needsMoreFijacion
+              ? ProcedureStatus.PENDIENTE_FIJACION
+              : ProcedureStatus.EXITOSO,
             outcome: ProcedureOutcome.TRASLADO_CIUDADANO,
-            closedAt: new Date(),
-            closedByOfficerId: actor.id,
+            closedAt: needsMoreFijacion ? null : new Date(),
+            closedByOfficerId: needsMoreFijacion ? null : actor.id,
             fijaciones: data.fijaciones!.trim(),
+            fijacionCompleta: !needsMoreFijacion,
             detaineeId: detainee.id,
           },
           include: PROCEDURE_INCLUDE,
@@ -331,6 +338,43 @@ export class ProceduresService {
     }
 
     throw new BadRequestException('Resultado de cierre no válido');
+  }
+
+  async completeCommandFijacion(
+    actor: AuthenticatedOfficer,
+    procedureId: string,
+    files?: Record<string, Express.Multer.File[]>,
+  ): Promise<unknown> {
+    const procedure = await this.findProcedure(actor, procedureId);
+
+    if (procedure.status !== ProcedureStatus.PENDIENTE_FIJACION) {
+      throw new BadRequestException('Este procedimiento no está pendiente de fijación en comando');
+    }
+
+    const uploadedPhotoCount = files
+      ? Object.keys(DETAINEE_PHOTO_FIELD_MAP).filter((field) => files[field]?.[0]?.buffer)
+          .length
+      : 0;
+    if (uploadedPhotoCount < 6) {
+      throw new BadRequestException('Debe adjuntar al menos 6 fotografías de fijación en comando');
+    }
+
+    if (!procedure.detaineeId) {
+      throw new BadRequestException('No hay ciudadano vinculado al procedimiento');
+    }
+
+    await this.persistDetaineePhotos(procedure.detaineeId, files!);
+
+    return this.prisma.procedure.update({
+      where: { id: procedureId },
+      data: {
+        status: ProcedureStatus.EXITOSO,
+        fijacionCompleta: true,
+        closedAt: new Date(),
+        closedByOfficerId: actor.id,
+      },
+      include: PROCEDURE_INCLUDE,
+    });
   }
 
   async admitTransitDetainee(

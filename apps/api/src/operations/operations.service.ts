@@ -14,8 +14,15 @@ import {
   PrismaService,
   RangeRole,
   VehicleType,
-  ShiftStatus,
   WeaponStatus,
+  ShiftStatus,
+  MinuteCatalogKind,
+  DEFAULT_MINUTE_HEADER_LINES,
+  DEFAULT_MINUTE_RESEÑA_PREFIX,
+  DEFAULT_MINUTE_LEMA,
+  DEFAULT_MINUTE_CONCEPTOS,
+  DEFAULT_MINUTE_ASUNTOS,
+  MAX_MINUTE_PHOTOS,
 } from '@polisur/database';
 import { randomBytes } from 'node:crypto';
 import { createReadStream } from 'node:fs';
@@ -33,6 +40,7 @@ import {
 } from '../common/utils/operational-immutability.util';
 import { DETAINEE_PHOTO_FIELD_MAP } from './interceptors/detainee-photos.interceptor';
 import { DetaineeStorageService } from './services/detainee-storage.service';
+import { PatrolMinuteStorageService } from './services/patrol-minute-storage.service';
 
 const DETAINEE_INCLUDE = {
   detentionCell: { select: { id: true, code: true, name: true, block: true } },
@@ -58,6 +66,7 @@ export class OperationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly detaineeStorage: DetaineeStorageService,
+    private readonly patrolMinuteStorage: PatrolMinuteStorageService,
   ) {}
 
   // ─── COMANDOS ───────────────────────────────────────────────────────────────
@@ -142,6 +151,103 @@ export class OperationsService {
   ): Promise<unknown> {
     assertDepartmentAccess(actor, data.departmentId);
     return this.prisma.controlPoint.create({ data });
+  }
+
+  // ─── CATÁLOGO Y PLANTILLA DE MINUTAS ────────────────────────────────────────
+
+  async ensureMinuteCatalogSeeds(): Promise<void> {
+    for (const label of DEFAULT_MINUTE_CONCEPTOS) {
+      await this.prisma.minuteCatalogEntry.upsert({
+        where: { kind_label: { kind: MinuteCatalogKind.CONCEPTO, label } },
+        create: { kind: MinuteCatalogKind.CONCEPTO, label },
+        update: { isActive: true },
+      });
+    }
+    for (const label of DEFAULT_MINUTE_ASUNTOS) {
+      await this.prisma.minuteCatalogEntry.upsert({
+        where: { kind_label: { kind: MinuteCatalogKind.ASUNTO, label } },
+        create: { kind: MinuteCatalogKind.ASUNTO, label },
+        update: { isActive: true },
+      });
+    }
+  }
+
+  listMinuteCatalog(kind?: 'CONCEPTO' | 'ASUNTO'): Promise<unknown[]> {
+    return this.prisma.minuteCatalogEntry.findMany({
+      where: {
+        isActive: true,
+        ...(kind ? { kind: kind as MinuteCatalogKind } : {}),
+      },
+      orderBy: [{ useCount: 'desc' }, { label: 'asc' }],
+      take: 100,
+    });
+  }
+
+  async addMinuteCatalogEntry(
+    kind: 'CONCEPTO' | 'ASUNTO',
+    label: string,
+  ): Promise<unknown> {
+    const trimmed = label.trim();
+    if (trimmed.length < 3) {
+      throw new BadRequestException('El texto debe tener al menos 3 caracteres');
+    }
+    return this.prisma.minuteCatalogEntry.upsert({
+      where: {
+        kind_label: { kind: kind as MinuteCatalogKind, label: trimmed },
+      },
+      create: { kind: kind as MinuteCatalogKind, label: trimmed },
+      update: { isActive: true },
+    });
+  }
+
+  async getMinuteDepartmentConfig(departmentId: string): Promise<unknown> {
+    const department = await this.prisma.department.findUnique({
+      where: { id: departmentId },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        minuteHeaderLines: true,
+        minuteReseñaPrefix: true,
+        minuteLema: true,
+      },
+    });
+    if (!department) {
+      throw new NotFoundException('Comando no encontrado');
+    }
+
+    const headerLines = Array.isArray(department.minuteHeaderLines)
+      ? (department.minuteHeaderLines as string[])
+      : [...DEFAULT_MINUTE_HEADER_LINES, department.name];
+
+    return {
+      departmentId: department.id,
+      divisionName: department.name,
+      headerLines,
+      reseñaPrefix: department.minuteReseñaPrefix ?? DEFAULT_MINUTE_RESEÑA_PREFIX,
+      lema: department.minuteLema ?? DEFAULT_MINUTE_LEMA.join('\n'),
+    };
+  }
+
+  private async touchCatalogUsage(concepto?: string, asunto?: string): Promise<void> {
+    const updates: Promise<unknown>[] = [];
+    if (concepto?.trim()) {
+      updates.push(
+        this.prisma.minuteCatalogEntry.updateMany({
+          where: { kind: MinuteCatalogKind.CONCEPTO, label: concepto.trim() },
+          data: { useCount: { increment: 1 } },
+        }),
+      );
+    }
+    if (asunto?.trim()) {
+      updates.push(
+        this.prisma.minuteCatalogEntry.updateMany({
+          where: { kind: MinuteCatalogKind.ASUNTO, label: asunto.trim() },
+          data: { useCount: { increment: 1 } },
+        }),
+      );
+    }
+    await Promise.all(updates);
   }
 
   // ─── CUADRANTES ─────────────────────────────────────────────────────────────
@@ -314,7 +420,16 @@ export class OperationsService {
       minuteRole?: MinuteRole;
       parroquia: string;
       cuadrante: string;
+      lugar?: string;
+      concepto?: string;
+      asunto?: string;
+      reseñaPrefix?: string;
       descripcion: string;
+      accionesTomadas?: string;
+      unidades?: string;
+      lema?: string;
+      eventAt?: string;
+      peaceQuadrantId?: string;
       departmentId: string;
       squadId?: string;
       latitude?: number;
@@ -328,6 +443,7 @@ export class OperationsService {
         notes?: string;
       }>;
     },
+    files?: Express.Multer.File[],
   ): Promise<unknown> {
     if (!data.officerIds.length) {
       throw new BadRequestException('Debe incluir al menos un funcionario en la minuta');
@@ -377,19 +493,62 @@ export class OperationsService {
       }))
       .filter((vehicle) => vehicle.plate.length >= 3);
 
-    return this.prisma.$transaction(async (tx) => {
-      const patrol = await tx.patrolMinute.create({
+    const department = await this.prisma.department.findUnique({
+      where: { id: data.departmentId },
+      select: { minuteReseñaPrefix: true, minuteLema: true, name: true },
+    });
+
+    let parroquia = data.parroquia;
+    let cuadrante = data.cuadrante;
+    let peaceQuadrantId = data.peaceQuadrantId;
+
+    if (peaceQuadrantId) {
+      const pq = await this.prisma.peaceQuadrant.findUnique({
+        where: { id: peaceQuadrantId },
+        select: { code: true, parroquia: true },
+      });
+      if (pq) {
+        parroquia = pq.parroquia;
+        cuadrante = pq.code;
+      }
+    }
+
+    const reseñaPrefix =
+      data.reseñaPrefix?.trim() ||
+      department?.minuteReseñaPrefix ||
+      DEFAULT_MINUTE_RESEÑA_PREFIX;
+    const lema =
+      data.lema?.trim() ||
+      department?.minuteLema ||
+      DEFAULT_MINUTE_LEMA.join('\n');
+    const eventAt = data.eventAt ? new Date(data.eventAt) : new Date();
+
+    if (files && files.length > MAX_MINUTE_PHOTOS) {
+      throw new BadRequestException(`Máximo ${MAX_MINUTE_PHOTOS} fotografías por minuta`);
+    }
+
+    const patrol = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.patrolMinute.create({
         data: {
           code,
           patrolType: data.patrolType,
           minuteRole: MinuteRole.SALIDA,
-          parroquia: data.parroquia,
-          cuadrante: data.cuadrante,
-          descripcion: data.descripcion,
+          parroquia,
+          cuadrante,
+          lugar: data.lugar?.trim() || undefined,
+          concepto: data.concepto?.trim() || undefined,
+          asunto: data.asunto?.trim() || undefined,
+          reseñaPrefix,
+          descripcion: data.descripcion.trim(),
+          accionesTomadas: data.accionesTomadas?.trim() || undefined,
+          unidades: data.unidades?.trim() || undefined,
+          lema,
+          eventAt,
           latitude: data.latitude,
           longitude: data.longitude,
           departmentId: data.departmentId,
           squadId: data.squadId,
+          peaceQuadrantId: peaceQuadrantId || undefined,
           createdByOfficerId: actor.id,
           officers: {
             create: officers.map((officer) => ({
@@ -401,17 +560,15 @@ export class OperationsService {
             })),
           },
           ...(normalizedVehicles.length
-            ? {
-                vehicles: {
-                  create: normalizedVehicles,
-                },
-              }
+            ? { vehicles: { create: normalizedVehicles } }
             : {}),
         },
         include: {
           officers: { include: { officer: true } },
           recoveredObjects: true,
           vehicles: true,
+          photos: true,
+          department: { select: { name: true, code: true } },
         },
       });
 
@@ -421,12 +578,70 @@ export class OperationsService {
           code: procCode,
           departmentId: data.departmentId,
           squadId: data.squadId,
-          departureMinuteId: patrol.id,
+          departureMinuteId: created.id,
           status: ProcedureStatus.EN_CURSO,
         },
       });
 
-      return patrol;
+      return created;
+    });
+
+    if (files?.length) {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.buffer) continue;
+        const saved = await this.patrolMinuteStorage.saveWebp(
+          file.buffer,
+          patrol.id,
+          i,
+        );
+        await this.prisma.patrolMinutePhoto.create({
+          data: {
+            patrolMinuteId: patrol.id,
+            filename: saved.filename,
+            sortOrder: i,
+            label: `Fijación ${i + 1}`,
+          },
+        });
+      }
+    }
+
+    await this.touchCatalogUsage(data.concepto, data.asunto);
+
+    return this.prisma.patrolMinute.findUnique({
+      where: { id: patrol.id },
+      include: {
+        officers: { include: { officer: true } },
+        vehicles: true,
+        photos: true,
+        peaceQuadrant: true,
+        department: { select: { name: true, code: true } },
+      },
+    });
+  }
+
+  async streamPatrolPhoto(filename: string, res: Response): Promise<void> {
+    await this.patrolMinuteStorage.ensureStorageReady();
+    this.patrolMinuteStorage.assertSafeFilename(filename);
+
+    const photo = await this.prisma.patrolMinutePhoto.findFirst({
+      where: { filename },
+      select: { id: true },
+    });
+
+    if (!photo) {
+      throw new NotFoundException('Archivo no encontrado');
+    }
+
+    const absolutePath = this.patrolMinuteStorage.resolveAbsolutePath(filename);
+    res.setHeader('Content-Type', 'image/webp');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+
+    await new Promise<void>((resolve, reject) => {
+      createReadStream(absolutePath)
+        .on('error', reject)
+        .on('end', resolve)
+        .pipe(res);
     });
   }
 
@@ -434,7 +649,7 @@ export class OperationsService {
     const active = await this.prisma.procedure.findFirst({
       where: {
         squadId,
-        status: { in: [ProcedureStatus.EN_CURSO, ProcedureStatus.PENDIENTE_CIERRE] },
+        status: { in: [ProcedureStatus.EN_CURSO, ProcedureStatus.PENDIENTE_CIERRE, ProcedureStatus.PENDIENTE_FIJACION] },
       },
       select: { code: true },
     });

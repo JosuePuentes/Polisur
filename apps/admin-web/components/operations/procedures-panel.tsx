@@ -26,6 +26,7 @@ const PHOTO_FIELDS = [
 const STATUS_LABEL: Record<string, string> = {
   EN_CURSO: 'En curso — pendiente llegada',
   PENDIENTE_CIERRE: 'Pendiente de cierre',
+  PENDIENTE_FIJACION: 'Pendiente fijación en comando',
   SIN_NOVEDAD: 'Cerrado sin novedad',
   EXITOSO: 'Procedimiento exitoso',
 };
@@ -68,6 +69,8 @@ export function ProceduresPanel() {
     descripcion: '',
     bringsDetainee: false,
     bringsObjects: false,
+    bringsVehicles: false,
+    bringsPersons: false,
     officerIds: [] as string[],
   });
   const [arrivalVehicles, setArrivalVehicles] = useState<
@@ -87,9 +90,17 @@ export function ProceduresPanel() {
     objectDescription: '',
   });
   const [closePhotos, setClosePhotos] = useState<Record<string, File>>({});
+  const [fijacionCompleta, setFijacionCompleta] = useState(false);
+  const [commandFijacionPhotos, setCommandFijacionPhotos] = useState<Record<string, File>>({});
 
   const activeCount = useMemo(
-    () => procedures.filter((p) => p.status === 'EN_CURSO' || p.status === 'PENDIENTE_CIERRE').length,
+    () =>
+      procedures.filter(
+        (p) =>
+          p.status === 'EN_CURSO' ||
+          p.status === 'PENDIENTE_CIERRE' ||
+          p.status === 'PENDIENTE_FIJACION',
+      ).length,
     [procedures],
   );
 
@@ -112,6 +123,8 @@ export function ProceduresPanel() {
       descripcion: '',
       bringsDetainee: false,
       bringsObjects: false,
+      bringsVehicles: false,
+      bringsPersons: false,
       officerIds:
         proc.departureMinute.officers?.map((row) => row.officer.id) ?? [],
     });
@@ -127,6 +140,8 @@ export function ProceduresPanel() {
         descripcion: arrivalForm.descripcion,
         bringsDetainee: arrivalForm.bringsDetainee,
         bringsObjects: arrivalForm.bringsObjects,
+        bringsVehicles: arrivalForm.bringsVehicles,
+        bringsPersons: arrivalForm.bringsPersons,
         officerIds: arrivalForm.officerIds.length
           ? arrivalForm.officerIds
           : officers.slice(0, 1).map((o) => o.id),
@@ -160,6 +175,7 @@ export function ProceduresPanel() {
     if (closeForm.alias) fd.set('alias', closeForm.alias);
     if (closeForm.delitoInicial) fd.set('delitoInicial', closeForm.delitoInicial);
     if (closeForm.objectDescription) fd.set('objectDescription', closeForm.objectDescription);
+    fd.set('fijacionCompleta', fijacionCompleta ? 'true' : 'false');
     for (const field of PHOTO_FIELDS) {
       const file = closePhotos[field.key];
       if (file) fd.set(field.key, file);
@@ -172,6 +188,25 @@ export function ProceduresPanel() {
       reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo cerrar el procedimiento');
+    }
+  }
+
+  async function submitCommandFijacion(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selected) return;
+    setError('');
+    const fd = new FormData();
+    for (const field of PHOTO_FIELDS) {
+      const file = commandFijacionPhotos[field.key];
+      if (file) fd.set(field.key, file);
+    }
+    try {
+      await proceduresApi.completeFijacion(selected.id, fd);
+      setMsg('Fijación en comando completada — ciudadano listo para calabozos');
+      setSelected(null);
+      reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo completar la fijación');
     }
   }
 
@@ -295,6 +330,26 @@ export function ProceduresPanel() {
                     />
                     Trae objetos recuperados
                   </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={arrivalForm.bringsVehicles}
+                      onChange={(e) =>
+                        setArrivalForm({ ...arrivalForm, bringsVehicles: e.target.checked })
+                      }
+                    />
+                    Trae vehículos
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={arrivalForm.bringsPersons}
+                      onChange={(e) =>
+                        setArrivalForm({ ...arrivalForm, bringsPersons: e.target.checked })
+                      }
+                    />
+                    Trae personas (sin detención)
+                  </label>
                   <MinuteVehiclesEditor vehicles={arrivalVehicles} onChange={setArrivalVehicles} />
                   <button type="submit" className={`${btnCls} w-full`}>
                     Registrar llegada
@@ -380,6 +435,19 @@ export function ProceduresPanel() {
                         }
                       />
                       <p className="text-xs text-slate-500">Adjunte al menos 6 fotografías de fijación:</p>
+                      <label className="flex items-center gap-2 text-xs text-amber-300/90">
+                        <input
+                          type="checkbox"
+                          checked={fijacionCompleta}
+                          onChange={(e) => setFijacionCompleta(e.target.checked)}
+                        />
+                        Fijación completa en campo (6 fotos listas)
+                      </label>
+                      {!fijacionCompleta && (
+                        <p className="text-[10px] text-amber-400/70">
+                          Si la fijación queda pendiente, el procedimiento pasará a espera de fijación en comando.
+                        </p>
+                      )}
                       {PHOTO_FIELDS.map((field) => (
                         <label key={field.key} className="block text-xs text-slate-400">
                           {field.label}
@@ -399,6 +467,41 @@ export function ProceduresPanel() {
 
                   <button type="submit" className={`${btnCls} w-full`}>
                     Cerrar procedimiento
+                  </button>
+                </form>
+              )}
+
+              {canManage && selected.status === 'PENDIENTE_FIJACION' && (
+                <form
+                  onSubmit={(e) => void submitCommandFijacion(e)}
+                  className="space-y-3 border-t border-slate-800 pt-4"
+                >
+                  <h3 className="text-xs font-semibold uppercase text-amber-400">
+                    Fijación pendiente en comando
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Cargue las 6 fotografías de fijación con objetos incautados tomadas en el comando.
+                    Luego el ciudadano podrá ingresar a calabozos.
+                  </p>
+                  {PHOTO_FIELDS.map((field) => (
+                    <label key={field.key} className="block text-xs text-slate-400">
+                      {field.label}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        required
+                        className="mt-1 block w-full text-[10px]"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setCommandFijacionPhotos((prev) => ({ ...prev, [field.key]: file }));
+                          }
+                        }}
+                      />
+                    </label>
+                  ))}
+                  <button type="submit" className={`${btnCls} w-full`}>
+                    Completar fijación en comando
                   </button>
                 </form>
               )}

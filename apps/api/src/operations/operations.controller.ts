@@ -28,6 +28,7 @@ import { GetUser } from '../common/decorators/get-user.decorator';
 import { AuthenticatedOfficer } from '../common/interfaces/authenticated-officer.interface';
 import { OperationsService } from './operations.service';
 import { DetaineePhotosInterceptor } from './interceptors/detainee-photos.interceptor';
+import { PatrolPhotosInterceptor } from './interceptors/patrol-photos.interceptor';
 
 @ApiTags('Operaciones')
 @ApiBearerAuth('JWT')
@@ -93,6 +94,26 @@ export class OperationsController {
     return this.operations.assignQuadrantOfficer(id, body.officerId ?? null, actor);
   }
 
+  @Get('minute-catalog')
+  @RequirePermissions(SITOP_PERMISSIONS.PATROL_VIEW)
+  listMinuteCatalog(@Query('kind') kind?: 'CONCEPTO' | 'ASUNTO'): Promise<unknown[]> {
+    return this.operations.listMinuteCatalog(kind);
+  }
+
+  @Post('minute-catalog')
+  @RequirePermissions(SITOP_PERMISSIONS.PATROL_MANAGE)
+  addMinuteCatalog(
+    @Body() body: { kind: 'CONCEPTO' | 'ASUNTO'; label: string },
+  ): Promise<unknown> {
+    return this.operations.addMinuteCatalogEntry(body.kind, body.label);
+  }
+
+  @Get('minute-config/:departmentId')
+  @RequirePermissions(SITOP_PERMISSIONS.PATROL_VIEW)
+  getMinuteConfig(@Param('departmentId') departmentId: string): Promise<unknown> {
+    return this.operations.getMinuteDepartmentConfig(departmentId);
+  }
+
   @Get('patrols')
   @RequirePermissions(SITOP_PERMISSIONS.PATROL_VIEW)
   listPatrols(
@@ -104,6 +125,7 @@ export class OperationsController {
 
   @Post('patrols')
   @RequirePermissions(SITOP_PERMISSIONS.PATROL_MANAGE)
+  @UseInterceptors(PatrolPhotosInterceptor())
   createPatrol(
     @GetUser() actor: AuthenticatedOfficer,
     @Body()
@@ -111,22 +133,54 @@ export class OperationsController {
       patrolType: PatrolType;
       parroquia: string;
       cuadrante: string;
+      lugar?: string;
+      concepto?: string;
+      asunto?: string;
+      reseñaPrefix?: string;
       descripcion: string;
+      accionesTomadas?: string;
+      unidades?: string;
+      lema?: string;
+      eventAt?: string;
+      peaceQuadrantId?: string;
       departmentId: string;
       squadId?: string;
       latitude?: number;
       longitude?: number;
-      officerIds: string[];
+      officerIds: string | string[];
       leaderOfficerId?: string;
-      vehicles?: Array<{
-        plate: string;
-        vehicleType: VehicleType;
-        ownerCedula?: string;
-        notes?: string;
-      }>;
+      vehicles?: string;
     },
+    @Req() request: { files?: Express.Multer.File[] },
   ): Promise<unknown> {
-    return this.operations.createPatrol(actor, body);
+    const officerIds = Array.isArray(body.officerIds)
+      ? body.officerIds
+      : typeof body.officerIds === 'string'
+        ? (JSON.parse(body.officerIds) as string[])
+        : [];
+    const vehicles = body.vehicles
+      ? (JSON.parse(body.vehicles) as Array<{
+          plate: string;
+          vehicleType: VehicleType;
+          ownerCedula?: string;
+          notes?: string;
+        }>)
+      : undefined;
+
+    return this.operations.createPatrol(
+      actor,
+      { ...body, officerIds, vehicles },
+      request.files,
+    );
+  }
+
+  @Get('patrols/photos/:filename')
+  @RequirePermissions(SITOP_PERMISSIONS.PATROL_VIEW)
+  async streamPatrolPhoto(
+    @Param('filename') filename: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    return this.operations.streamPatrolPhoto(filename, res);
   }
 
   @Post('patrols/:id/recovered-objects')

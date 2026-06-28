@@ -24,6 +24,9 @@ export interface ProcedureRecord {
   outcome: string | null;
   bringsDetainee: boolean | null;
   bringsObjects: boolean | null;
+  bringsVehicles: boolean | null;
+  bringsPersons: boolean | null;
+  fijacionCompleta: boolean | null;
   fijaciones: string | null;
   mergedNarrative: string | null;
   closedAt: string | null;
@@ -74,6 +77,8 @@ export const proceduresApi = {
       longitude?: number;
       bringsDetainee: boolean;
       bringsObjects: boolean;
+      bringsVehicles?: boolean;
+      bringsPersons?: boolean;
       officerIds: string[];
       leaderOfficerId?: string;
       vehicles?: Array<{
@@ -95,6 +100,18 @@ export const proceduresApi = {
 
   closeForm: (id: string, formData: FormData) =>
     fetch(`${API_BASE_URL}/procedures/${id}/close`, {
+      method: 'POST',
+      headers: {
+        ...(getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {}),
+      },
+      body: formData,
+    }).then(async (response) => {
+      if (!response.ok) throw new Error(await parseError(response));
+      return response.json() as Promise<ProcedureRecord>;
+    }),
+
+  completeFijacion: (id: string, formData: FormData) =>
+    fetch(`${API_BASE_URL}/procedures/${id}/complete-fijacion`, {
       method: 'POST',
       headers: {
         ...(getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {}),

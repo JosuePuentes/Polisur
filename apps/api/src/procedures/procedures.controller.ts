@@ -75,6 +75,8 @@ export class ProceduresController {
       longitude?: number;
       bringsDetainee: boolean;
       bringsObjects: boolean;
+      bringsVehicles?: boolean;
+      bringsPersons?: boolean;
       officerIds: string[];
       leaderOfficerId?: string;
       vehicles?: Array<{
@@ -104,11 +106,17 @@ export class ProceduresController {
       alias?: string;
       delitoInicial?: string;
       objectDescription?: string;
+      fijacionCompleta?: string | boolean;
       bringsDetainee?: string | boolean;
       bringsObjects?: string | boolean;
     },
     @Req() request: { files?: Record<string, Express.Multer.File[]> },
   ): Promise<unknown> {
+    const fijacionCompleta =
+      body.fijacionCompleta === true ||
+      body.fijacionCompleta === 'true' ||
+      body.fijacionCompleta === '1';
+
     return this.procedures.closeProcedure(
       actor,
       id,
@@ -121,8 +129,20 @@ export class ProceduresController {
         alias: body.alias,
         delitoInicial: body.delitoInicial,
         objectDescription: body.objectDescription,
+        fijacionCompleta,
       },
       request.files,
     );
+  }
+
+  @Post(':id/complete-fijacion')
+  @RequirePermissions(SITOP_PERMISSIONS.PROCEDURES_MANAGE)
+  @UseInterceptors(DetaineePhotosInterceptor())
+  completeCommandFijacion(
+    @GetUser() actor: AuthenticatedOfficer,
+    @Param('id') id: string,
+    @Req() request: { files?: Record<string, Express.Multer.File[]> },
+  ): Promise<unknown> {
+    return this.procedures.completeCommandFijacion(actor, id, request.files);
   }
 }

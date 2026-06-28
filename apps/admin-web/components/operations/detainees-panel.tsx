@@ -264,7 +264,7 @@ export function DetaineesPanel() {
 
   return (
     <Shell
-      title="Detenidos y Calabozos"
+      title="Calabozos"
       subtitle="Celdas, reseña fotográfica y preliminares en tránsito desde procedimientos en curso."
     >
       {msg && <p className="text-sm text-emerald-300">{msg}</p>}

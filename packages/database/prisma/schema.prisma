@@ -117,8 +117,14 @@ enum MinuteRole {
 enum ProcedureStatus {
   EN_CURSO
   PENDIENTE_CIERRE
+  PENDIENTE_FIJACION
   SIN_NOVEDAD
   EXITOSO
+}
+
+enum MinuteCatalogKind {
+  CONCEPTO
+  ASUNTO
 }
 
 enum ProcedureOutcome {
@@ -150,6 +156,12 @@ model Department {
   latitude    Float?
   longitude   Float?
   isActive    Boolean  @default(true)
+  /// Encabezado institucional editable por división/comando (líneas JSON)
+  minuteHeaderLines Json?
+  /// Prefijo de reseña por defecto (instrucciones superiores)
+  minuteReseñaPrefix String? @db.Text
+  /// Lema institucional al pie de la minuta
+  minuteLema         String? @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -445,10 +457,32 @@ model PeaceQuadrant {
   assignedOfficerId String?
   assignedOfficer   Officer? @relation("PeaceQuadrantAssignee", fields: [assignedOfficerId], references: [id], onDelete: SetNull)
 
+  patrolMinutes PatrolMinute[]
+
   @@index([parroquia], map: "idx_peace_quadrant_parroquia_btree")
   @@index([quadrantNumber], map: "idx_peace_quadrant_number_btree")
   @@index([assignedOfficerId], map: "idx_peace_quadrant_officer_btree")
   @@map("peace_quadrants")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CATÁLOGO DE CONCEPTOS Y ASUNTOS DE MINUTA
+// ─────────────────────────────────────────────────────────────────────────────
+
+model MinuteCatalogEntry {
+  id        String            @id @default(cuid())
+  kind      MinuteCatalogKind
+  label     String            @db.VarChar(160)
+  code      String?           @db.VarChar(32)
+  isActive  Boolean           @default(true)
+  useCount  Int               @default(0)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@unique([kind, label], map: "uq_minute_catalog_kind_label")
+  @@index([kind], map: "idx_minute_catalog_kind_btree")
+  @@index([label], map: "idx_minute_catalog_label_btree")
+  @@map("minute_catalog_entries")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -462,7 +496,18 @@ model PatrolMinute {
   minuteRole   MinuteRole @default(SALIDA)
   parroquia    String     @db.VarChar(80)
   cuadrante    String     @db.VarChar(40)
+  /// Dirección o lugar operativo (ej. Av. 62 con calle 149A)
+  lugar        String?    @db.VarChar(300)
+  concepto     String?    @db.VarChar(120)
+  asunto       String?    @db.VarChar(300)
+  /// Prefijo institucional de la reseña (editable por división)
+  reseñaPrefix String?    @db.Text
+  /// Cuerpo narrativo del funcionario
   descripcion  String     @db.Text
+  accionesTomadas String? @db.Text
+  unidades     String?    @db.VarChar(200)
+  lema         String?    @db.Text
+  eventAt      DateTime?
   latitude     Float?
   longitude    Float?
   createdAt    DateTime   @default(now())
@@ -474,6 +519,9 @@ model PatrolMinute {
   squadId String?
   squad   Squad?  @relation(fields: [squadId], references: [id], onDelete: SetNull)
 
+  peaceQuadrantId String?
+  peaceQuadrant   PeaceQuadrant? @relation(fields: [peaceQuadrantId], references: [id], onDelete: SetNull)
+
   createdByOfficerId String
   createdByOfficer   Officer @relation("PatrolCreator", fields: [createdByOfficerId], references: [id], onDelete: Restrict)
 
@@ -482,13 +530,31 @@ model PatrolMinute {
   officers         PatrolMinuteOfficer[]
   recoveredObjects RecoveredObject[]
   vehicles         PatrolMinuteVehicle[]
+  photos           PatrolMinutePhoto[]
   procedureDeparture Procedure? @relation("ProcedureDeparture")
   procedureArrival   Procedure? @relation("ProcedureArrival")
 
   @@index([departmentId], map: "idx_patrol_dept_btree")
   @@index([createdAt], map: "idx_patrol_created_btree")
   @@index([minuteRole], map: "idx_patrol_minute_role_btree")
+  @@index([concepto], map: "idx_patrol_concepto_btree")
+  @@index([asunto], map: "idx_patrol_asunto_btree")
+  @@index([peaceQuadrantId], map: "idx_patrol_peace_quadrant_btree")
   @@map("patrol_minutes")
+}
+
+model PatrolMinutePhoto {
+  id        String   @id @default(cuid())
+  filename  String   @unique @db.VarChar(255)
+  label     String?  @db.VarChar(120)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  patrolMinuteId String
+  patrolMinute   PatrolMinute @relation(fields: [patrolMinuteId], references: [id], onDelete: Cascade)
+
+  @@index([patrolMinuteId], map: "idx_patrol_photo_minute_btree")
+  @@map("patrol_minute_photos")
 }
 
 model PatrolMinuteOfficer {
@@ -559,7 +625,10 @@ model Procedure {
   outcome         ProcedureOutcome?
   bringsDetainee  Boolean?
   bringsObjects   Boolean?
+  bringsVehicles  Boolean?
+  bringsPersons   Boolean?
   fijaciones      String?           @db.Text
+  fijacionCompleta Boolean          @default(false)
   mergedNarrative String?           @db.Text
   closedAt        DateTime?
   createdAt       DateTime          @default(now())

@@ -78,7 +78,32 @@ export const opsApi = {
   }) => api('/quadrants', { method: 'POST', body: JSON.stringify(body) }),
   listPatrols: (departmentId?: string) =>
     api<unknown[]>(`/patrols${departmentId ? `?departmentId=${departmentId}` : ''}`),
-  createPatrol: (body: unknown) => api('/patrols', { method: 'POST', body: JSON.stringify(body) }),
+  listMinuteCatalog: (kind?: 'CONCEPTO' | 'ASUNTO') =>
+    api<Array<{ id: string; kind: string; label: string; useCount: number }>>(
+      `/minute-catalog${kind ? `?kind=${kind}` : ''}`,
+    ),
+  addMinuteCatalog: (body: { kind: 'CONCEPTO' | 'ASUNTO'; label: string }) =>
+    api('/minute-catalog', { method: 'POST', body: JSON.stringify(body) }),
+  getMinuteConfig: (departmentId: string) =>
+    api<{
+      departmentId: string;
+      divisionName: string;
+      headerLines: string[];
+      reseñaPrefix: string;
+      lema: string;
+    }>(`/minute-config/${departmentId}`),
+  createPatrol: (formData: FormData) =>
+    fetch(`${API_BASE_URL}/operations/patrols`, {
+      method: 'POST',
+      headers: {
+        ...(getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {}),
+      },
+      body: formData,
+    }).then(async (response) => {
+      if (!response.ok) throw new Error(await parseError(response));
+      return response.json();
+    }),
+  createPatrolJson: (body: unknown) => api('/patrols', { method: 'POST', body: JSON.stringify(body) }),
   addRecoveredObject: (patrolId: string, body: unknown) =>
     api(`/patrols/${patrolId}/recovered-objects`, { method: 'POST', body: JSON.stringify(body) }),
   heatmap: () => api<{ patrols: unknown[]; incidents: unknown[] }>('/heatmap'),

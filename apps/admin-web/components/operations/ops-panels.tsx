@@ -16,6 +16,7 @@ import {
   PeaceQuadrantsMap,
   type PeaceQuadrantMapRecord,
 } from '@/components/operations/peace-quadrants-map';
+import { OfficialMinuteForm } from '@/components/operations/official-minute-form';
 import type { Incident } from '@/lib/types/incident.types';
 
 const inputCls = 'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100';
@@ -39,66 +40,29 @@ export function PatrolPanel() {
   const isSuperAdmin = session?.rangeRole === 'SUPER_ADMIN';
 
   const [patrols, setPatrols] = useState<PatrolMapRecord[]>([]);
+  const [quadrants, setQuadrants] = useState<PeaceQuadrantMapRecord[]>([]);
   const [officers, setOfficers] = useState<Array<{ id: string; nombres: string; apellidos: string; cedula: string; departmentId?: string }>>([]);
   const [catalogs, setCatalogs] = useState<Awaited<ReturnType<typeof fetchRrhhCatalogs>> | null>(null);
-  const [form, setForm] = useState({
-    patrolType: 'MINUTA',
-    parroquia: PARROQUIAS_SAN_FRANCISCO[0] as string,
-    cuadrante: SECTORES_REFERENCIA[0] as string,
-    descripcion: '',
-    departmentId: '',
-    squadId: '',
-    officerIds: [] as string[],
-    leaderOfficerId: '',
-    latitude: null as number | null,
-    longitude: null as number | null,
-  });
   const [objDesc, setObjDesc] = useState('');
   const [objIdentifier, setObjIdentifier] = useState('');
-  const [minuteVehicles, setMinuteVehicles] = useState<
-    Array<{ plate: string; vehicleType: string; ownerCedula: string; notes: string }>
-  >([]);
   const [selectedPatrol, setSelectedPatrol] = useState('');
   const [highlightedPatrolId, setHighlightedPatrolId] = useState<string | null>(null);
-  const [gpsStatus, setGpsStatus] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
 
   const departments = catalogs?.departments ?? [];
 
-  const departmentOfficers = useMemo(
-    () =>
-      officers.filter(
-        (officer) => !form.departmentId || officer.departmentId === form.departmentId,
-      ),
-    [officers, form.departmentId],
-  );
-
-  const squads = departments.find((d) => d.id === form.departmentId)?.squads ?? [];
-
-  const draftOrigin =
-    form.latitude !== null && form.longitude !== null
-      ? { lat: form.latitude, lng: form.longitude }
-      : null;
-
   function loadData() {
-    void Promise.all([opsApi.listPatrols(), fetchRrhhCatalogs(), searchOfficers()]).then(
-      ([p, c, o]) => {
-        setPatrols(p as PatrolMapRecord[]);
-        setCatalogs(c);
-        setOfficers(o as typeof officers);
-
-        const defaultDept =
-          c.departments.find((d) => d.id === session?.departmentId) ??
-          c.departments[0];
-
-        if (defaultDept) {
-          setForm((f) => ({
-            ...f,
-            departmentId: f.departmentId || defaultDept.id,
-          }));
-        }
-      },
-    );
+    void Promise.all([
+      opsApi.listPatrols(),
+      fetchRrhhCatalogs(),
+      searchOfficers(),
+      opsApi.listQuadrants(),
+    ]).then(([p, c, o, q]) => {
+      setPatrols(p as PatrolMapRecord[]);
+      setCatalogs(c);
+      setOfficers(o as typeof officers);
+      setQuadrants(q as PeaceQuadrantMapRecord[]);
+    });
   }
 
   useEffect(() => {
@@ -106,35 +70,17 @@ export function PatrolPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function captureGps() {
-    if (!navigator.geolocation) {
-      setGpsStatus('Este dispositivo no soporta geolocalización.');
-      return;
-    }
-
-    setGpsStatus('Obteniendo ubicación…');
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setForm((f) => ({
-          ...f,
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        }));
-        setGpsStatus('Ubicación registrada para la minuta.');
-      },
-      () => setGpsStatus('No se pudo obtener la ubicación GPS.'),
-      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
-    );
-  }
+  const defaultDepartmentId =
+    departments.find((d) => d.id === session?.departmentId)?.id ?? departments[0]?.id ?? '';
 
   return (
     <Shell title="Patrullaje y Minutas" subtitle="Registre la minuta de salida para abrir un procedimiento. La escuadra queda en actuación hasta la minuta de llegada en Procedimientos en curso.">
       <PatrolMap
         patrols={patrols}
-        selectedCuadrante={form.cuadrante}
-        draftOrigin={draftOrigin}
+        selectedCuadrante={quadrants[0]?.code ?? ''}
+        draftOrigin={null}
         highlightedPatrolId={highlightedPatrolId}
-        onSelectCuadrante={(cuadrante) => setForm((f) => ({ ...f, cuadrante }))}
+        onSelectCuadrante={() => undefined}
       />
 
       <RegistrySearch
@@ -142,118 +88,21 @@ export function PatrolPanel() {
         hint="Cédulas, placas, bicicletas y matrículas registradas en minutas, detenidos, denuncias e inventario."
       />
 
-      <form
-        className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/40 p-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void opsApi
-            .createPatrol({
-              patrolType: form.patrolType,
-              parroquia: form.parroquia,
-              cuadrante: form.cuadrante,
-              descripcion: form.descripcion,
-              departmentId: form.departmentId,
-              squadId: form.squadId || undefined,
-              latitude: form.latitude ?? undefined,
-              longitude: form.longitude ?? undefined,
-              officerIds: form.officerIds.length
-                ? form.officerIds
-                : departmentOfficers.slice(0, 1).map((o) => o.id),
-              leaderOfficerId: form.leaderOfficerId || undefined,
-              vehicles: minuteVehicles
-                .filter((v) => v.plate.trim().length >= 3)
-                .map((v) => ({
-                  plate: v.plate.trim(),
-                  vehicleType: v.vehicleType,
-                  ownerCedula: v.ownerCedula.trim() || undefined,
-                  notes: v.notes.trim() || undefined,
-                })),
-            })
-            .then(() => {
-              setMsg('Minuta de salida registrada — procedimiento en curso abierto');
-              setForm((f) => ({ ...f, descripcion: '', latitude: null, longitude: null }));
-              setMinuteVehicles([]);
-              setGpsStatus(null);
-              return opsApi.listPatrols();
-            })
-            .then((list) => setPatrols(list as PatrolMapRecord[]));
-        }}
-      >
-        <h2 className="text-sm font-semibold text-slate-200">Minuta de salida</h2>
-        <p className="text-xs text-amber-400/80">
-          Al registrar la salida se abre un procedimiento en curso y la escuadra queda bloqueada hasta la llegada.
-        </p>
-        <div className="grid gap-3 md:grid-cols-2">
-          <select className={inputCls} value={form.patrolType} onChange={(e) => setForm({ ...form, patrolType: e.target.value })}>
-            <option value="MINUTA">Minuta</option>
-            <option value="PATRULLAJE">Patrullaje</option>
-            <option value="PROCEDIMIENTO_MIXTO">Procedimiento mixto</option>
-          </select>
-          <select
-            className={inputCls}
-            value={form.departmentId}
-            disabled={!isSuperAdmin && departments.length <= 1}
-            onChange={(e) => setForm({ ...form, departmentId: e.target.value, squadId: '', officerIds: [] })}
-          >
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-          <select className={inputCls} value={form.squadId} onChange={(e) => setForm({ ...form, squadId: e.target.value })}>
-            <option value="">Escuadra principal</option>
-            {squads.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          <select className={inputCls} value={form.parroquia} onChange={(e) => setForm({ ...form, parroquia: e.target.value })}>
-            {PARROQUIAS_SAN_FRANCISCO.map((p) => <option key={p}>{p}</option>)}
-          </select>
-          <select
-            className={inputCls}
-            value={form.cuadrante}
-            onChange={(e) => setForm({ ...form, cuadrante: e.target.value })}
-          >
-            {SECTORES_REFERENCIA.map((sector) => (
-              <option key={sector} value={sector}>{sector}</option>
-            ))}
-          </select>
-          <div className="flex flex-col gap-2">
-            <button type="button" className={btnCls} onClick={captureGps}>
-              Usar mi ubicación (origen)
-            </button>
-            {gpsStatus && <p className="text-xs text-slate-400">{gpsStatus}</p>}
-            {draftOrigin && (
-              <p className="font-mono text-[10px] text-cyan-400/80">
-                GPS: {draftOrigin.lat.toFixed(5)}, {draftOrigin.lng.toFixed(5)}
-              </p>
-            )}
-          </div>
-          <textarea required minLength={10} className={`md:col-span-2 ${inputCls}`} placeholder="Relato operativo" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
-        </div>
-        <div>
-          <p className="mb-2 text-xs text-slate-400">
-            Funcionarios de su comando asignados a la comisión:
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2 max-h-40 overflow-y-auto">
-            {departmentOfficers.map((o) => (
-              <label key={o.id} className="flex items-center gap-2 text-xs text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={form.officerIds.includes(o.id)}
-                  onChange={() => setForm((f) => ({
-                    ...f,
-                    officerIds: f.officerIds.includes(o.id)
-                      ? f.officerIds.filter((id) => id !== o.id)
-                      : [...f.officerIds, o.id],
-                  }))}
-                />
-                {o.nombres} {o.apellidos} ({o.cedula})
-              </label>
-            ))}
-          </div>
-        </div>
-        <MinuteVehiclesEditor vehicles={minuteVehicles} onChange={setMinuteVehicles} />
-        <button type="submit" className={btnCls}>Registrar minuta de salida</button>
-        {msg && <p className="text-sm text-emerald-300">{msg}</p>}
-      </form>
+      {msg && <p className="text-sm text-emerald-300">{msg}</p>}
+
+      {defaultDepartmentId && (
+        <OfficialMinuteForm
+          departments={departments}
+          officers={officers}
+          quadrants={quadrants}
+          defaultDepartmentId={defaultDepartmentId}
+          isSuperAdmin={isSuperAdmin}
+          onSuccess={(message) => {
+            setMsg(message);
+            void opsApi.listPatrols().then((list) => setPatrols(list as PatrolMapRecord[]));
+          }}
+        />
+      )}
 
       <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 space-y-3">
         <h2 className="text-sm font-semibold text-slate-200">Objeto recuperado</h2>

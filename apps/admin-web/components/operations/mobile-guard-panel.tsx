@@ -133,7 +133,7 @@ export function MobileGuardPanel() {
     void runWithOfflineFallback(
       'patrol',
       payload,
-      () => opsApi.createPatrol(payload),
+      () => opsApi.createPatrolJson(payload),
       () => {
         setMsg('Minuta / novedad transmitida al comando');
         setNovedad('');

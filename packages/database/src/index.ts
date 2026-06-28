@@ -18,6 +18,14 @@ export {
   quadrantCodeFromName,
   type DefaultPeaceQuadrantSeed,
 } from './constants/default-peace-quadrants';
+export {
+  DEFAULT_MINUTE_HEADER_LINES,
+  DEFAULT_MINUTE_RESEÑA_PREFIX,
+  DEFAULT_MINUTE_LEMA,
+  DEFAULT_MINUTE_CONCEPTOS,
+  DEFAULT_MINUTE_ASUNTOS,
+  MAX_MINUTE_PHOTOS,
+} from './constants/minute-defaults';
 
 export {
   AssetStatus,
@@ -31,6 +39,7 @@ export {
   IncidentOrigin,
   IncidentStatus,
   MinuteRole,
+  MinuteCatalogKind,
   ProcedureOutcome,
   ProcedureStatus,
   PatrolType,

@@ -97,7 +97,7 @@ async function executeQueuedAction(item: QueuedMobileAction): Promise<void> {
     }
     case 'patrol': {
       const payload = item.payload as MobilePatrolPayload;
-      await opsApi.createPatrol(payload);
+      await opsApi.createPatrolJson(payload);
       return;
     }
     case 'patrol-novedad': {
