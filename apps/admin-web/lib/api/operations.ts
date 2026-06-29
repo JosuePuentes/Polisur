@@ -164,6 +164,30 @@ export const opsApi = {
       checkInLongitude: number | null;
       department: { id: string; name: string; code: string };
     } | null>(`/shifts/mine${fecha ? `?fecha=${fecha}` : ''}`),
+  activateMobilePatrol: (body: {
+    credentialNumber: string;
+    latitude?: number;
+    longitude?: number;
+  }) => api('/mobile/activate', { method: 'POST', body: JSON.stringify(body) }),
+  updateMobilePosition: (body: { latitude: number; longitude: number }) =>
+    api('/mobile/position', { method: 'POST', body: JSON.stringify(body) }),
+  listMobileLivePatrols: () =>
+    api<
+      Array<{
+        officerId: string;
+        nombres: string;
+        apellidos: string;
+        credentialNumber: string;
+        grado: string | null;
+        latitude: number;
+        longitude: number;
+        cuadrante: string | null;
+        procedureCode: string | null;
+        squadName: string | null;
+        source: 'procedure' | 'shift';
+        isSelf: boolean;
+      }>
+    >('/mobile/live-patrols'),
   listInventory: (departmentId?: string, turno?: string) => {
     const params = new URLSearchParams();
     if (departmentId) params.set('departmentId', departmentId);

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -1468,5 +1469,300 @@ export class OperationsService {
       throw new NotFoundException('Detenido no encontrado');
     }
     assertDetaineeAllowsMutation(detainee.status);
+  }
+
+  // ─── APP MÓVIL / PATRULLAJE EN CAMPO ───────────────────────────────────────
+
+  async activateMobilePatrol(
+    actor: AuthenticatedOfficer,
+    credentialNumber: string,
+    coords?: { latitude?: number; longitude?: number },
+  ): Promise<{
+    officer: {
+      id: string;
+      nombres: string;
+      apellidos: string;
+      credentialNumber: string;
+      grado: string | null;
+    };
+    shift: {
+      id: string;
+      status: string;
+      horaInicio: string;
+      horaFin: string;
+      department: { id: string; name: string; code: string };
+    } | null;
+  }> {
+    const officer = await this.prisma.officer.findUnique({
+      where: { id: actor.id },
+      select: {
+        id: true,
+        nombres: true,
+        apellidos: true,
+        credentialNumber: true,
+        grado: true,
+        isSuspended: true,
+      },
+    });
+
+    if (!officer) {
+      throw new NotFoundException('Funcionario no encontrado');
+    }
+    if (officer.isSuspended) {
+      throw new ForbiddenException('Usuario suspendido');
+    }
+
+    const normalizedInput = credentialNumber.replace(/\s+/g, '').toUpperCase();
+    const normalizedStored = officer.credentialNumber.replace(/\s+/g, '').toUpperCase();
+    if (normalizedInput !== normalizedStored) {
+      throw new BadRequestException('Número de credencial incorrecto');
+    }
+
+    const dayStart = new Date(new Date().toISOString().slice(0, 10));
+    let shift = await this.prisma.officerShift.findFirst({
+      where: { officerId: actor.id, fecha: dayStart },
+      include: { department: { select: { id: true, name: true, code: true } } },
+    });
+
+    if (
+      shift &&
+      shift.status === ShiftStatus.ON_DUTY_PENDING &&
+      coords?.latitude != null &&
+      coords?.longitude != null
+    ) {
+      shift = await this.prisma.officerShift.update({
+        where: { id: shift.id },
+        data: {
+          status: ShiftStatus.ON_DUTY_ACTIVE,
+          checkedInAt: new Date(),
+          checkInLatitude: coords.latitude,
+          checkInLongitude: coords.longitude,
+        },
+        include: { department: { select: { id: true, name: true, code: true } } },
+      });
+    } else if (
+      shift &&
+      shift.status === ShiftStatus.ON_DUTY_ACTIVE &&
+      coords?.latitude != null &&
+      coords?.longitude != null
+    ) {
+      shift = await this.prisma.officerShift.update({
+        where: { id: shift.id },
+        data: {
+          checkInLatitude: coords.latitude,
+          checkInLongitude: coords.longitude,
+        },
+        include: { department: { select: { id: true, name: true, code: true } } },
+      });
+    }
+
+    return {
+      officer: {
+        id: officer.id,
+        nombres: officer.nombres,
+        apellidos: officer.apellidos,
+        credentialNumber: officer.credentialNumber,
+        grado: officer.grado,
+      },
+      shift: shift
+        ? {
+            id: shift.id,
+            status: shift.status,
+            horaInicio: shift.horaInicio,
+            horaFin: shift.horaFin,
+            department: shift.department,
+          }
+        : null,
+    };
+  }
+
+  async updateMobilePosition(
+    actor: AuthenticatedOfficer,
+    coords: { latitude: number; longitude: number },
+  ): Promise<{ ok: boolean }> {
+    const dayStart = new Date(new Date().toISOString().slice(0, 10));
+    const shift = await this.prisma.officerShift.findFirst({
+      where: {
+        officerId: actor.id,
+        fecha: dayStart,
+        status: ShiftStatus.ON_DUTY_ACTIVE,
+      },
+      select: { id: true },
+    });
+
+    if (!shift) {
+      return { ok: false };
+    }
+
+    await this.prisma.officerShift.update({
+      where: { id: shift.id },
+      data: {
+        checkInLatitude: coords.latitude,
+        checkInLongitude: coords.longitude,
+      },
+    });
+
+    return { ok: true };
+  }
+
+  async listMobileLivePatrolUnits(actor: AuthenticatedOfficer): Promise<
+    Array<{
+      officerId: string;
+      nombres: string;
+      apellidos: string;
+      credentialNumber: string;
+      grado: string | null;
+      latitude: number;
+      longitude: number;
+      cuadrante: string | null;
+      procedureCode: string | null;
+      squadName: string | null;
+      source: 'procedure' | 'shift';
+      isSelf: boolean;
+    }>
+  > {
+    const departmentId = resolveScopedDepartmentId(actor);
+    const dayStart = new Date(new Date().toISOString().slice(0, 10));
+    const units = new Map<
+      string,
+      {
+        officerId: string;
+        nombres: string;
+        apellidos: string;
+        credentialNumber: string;
+        grado: string | null;
+        latitude: number;
+        longitude: number;
+        cuadrante: string | null;
+        procedureCode: string | null;
+        squadName: string | null;
+        source: 'procedure' | 'shift';
+        isSelf: boolean;
+      }
+    >();
+
+    const [procedures, shifts] = await Promise.all([
+      this.prisma.procedure.findMany({
+        where: {
+          status: ProcedureStatus.EN_CURSO,
+          ...(departmentId ? { departmentId } : {}),
+        },
+        include: {
+          squad: { select: { name: true } },
+          departureMinute: {
+            select: {
+              cuadrante: true,
+              latitude: true,
+              longitude: true,
+              peaceQuadrant: { select: { centerLat: true, centerLng: true } },
+              officers: {
+                include: {
+                  officer: {
+                    select: {
+                      id: true,
+                      nombres: true,
+                      apellidos: true,
+                      credentialNumber: true,
+                      grado: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.officerShift.findMany({
+        where: {
+          fecha: dayStart,
+          status: ShiftStatus.ON_DUTY_ACTIVE,
+          checkInLatitude: { not: null },
+          checkInLongitude: { not: null },
+          ...(departmentId ? { departmentId } : {}),
+        },
+        include: {
+          officer: {
+            select: {
+              id: true,
+              nombres: true,
+              apellidos: true,
+              credentialNumber: true,
+              grado: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    for (const procedure of procedures) {
+      const minute = procedure.departureMinute;
+      const coords = this.resolveMobileCoordinates(minute);
+      if (!coords) continue;
+
+      for (const link of minute.officers) {
+        const officer = link.officer;
+        units.set(officer.id, {
+          officerId: officer.id,
+          nombres: officer.nombres,
+          apellidos: officer.apellidos,
+          credentialNumber: officer.credentialNumber,
+          grado: officer.grado,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          cuadrante: minute.cuadrante,
+          procedureCode: procedure.code,
+          squadName: procedure.squad?.name ?? null,
+          source: 'procedure',
+          isSelf: officer.id === actor.id,
+        });
+      }
+    }
+
+    for (const shift of shifts) {
+      if (units.has(shift.officerId)) continue;
+      if (shift.checkInLatitude == null || shift.checkInLongitude == null) continue;
+
+      units.set(shift.officerId, {
+        officerId: shift.officer.id,
+        nombres: shift.officer.nombres,
+        apellidos: shift.officer.apellidos,
+        credentialNumber: shift.officer.credentialNumber,
+        grado: shift.officer.grado,
+        latitude: shift.checkInLatitude,
+        longitude: shift.checkInLongitude,
+        cuadrante: null,
+        procedureCode: null,
+        squadName: null,
+        source: 'shift',
+        isSelf: shift.officer.id === actor.id,
+      });
+    }
+
+    return Array.from(units.values());
+  }
+
+  private resolveMobileCoordinates(minute: {
+    latitude: number | null;
+    longitude: number | null;
+    cuadrante: string;
+    peaceQuadrant: { centerLat: number | null; centerLng: number | null } | null;
+  }): { latitude: number; longitude: number } | null {
+    if (minute.latitude != null && minute.longitude != null) {
+      return { latitude: minute.latitude, longitude: minute.longitude };
+    }
+    if (minute.peaceQuadrant?.centerLat != null && minute.peaceQuadrant?.centerLng != null) {
+      return {
+        latitude: minute.peaceQuadrant.centerLat,
+        longitude: minute.peaceQuadrant.centerLng,
+      };
+    }
+
+    const match = minute.cuadrante.match(/(\d+)/);
+    if (!match) return null;
+    const n = Number.parseInt(match[1], 10);
+    return {
+      latitude: 10.545 + ((n % 4) - 1.5) * 0.004,
+      longitude: -71.665 + (Math.floor(n / 4) - 1) * 0.004,
+    };
   }
 }

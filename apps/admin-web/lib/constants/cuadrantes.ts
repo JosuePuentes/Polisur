@@ -4,6 +4,14 @@ export const SAN_FRANCISCO_CENTER = {
   lng: -71.665,
 } as const;
 
+/** Vista nacional para patrullaje móvil */
+export const VENEZUELA_CENTER = {
+  lat: 7.5,
+  lng: -66.0,
+} as const;
+
+export const VENEZUELA_ZOOM = 6;
+
 export const DEFAULT_MAP_ZOOM = 13;
 
 /** Coordenadas centrales de los cuadrantes oficiales C-xxx */

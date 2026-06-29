@@ -439,6 +439,33 @@ export class OperationsController {
     return this.operations.getMyShiftToday(actor.id, fecha);
   }
 
+  @Post('mobile/activate')
+  @RequirePermissions(SITOP_PERMISSIONS.SHIFTS_VIEW)
+  activateMobilePatrol(
+    @GetUser() actor: AuthenticatedOfficer,
+    @Body() body: { credentialNumber: string; latitude?: number; longitude?: number },
+  ): Promise<unknown> {
+    return this.operations.activateMobilePatrol(actor, body.credentialNumber, {
+      latitude: body.latitude,
+      longitude: body.longitude,
+    });
+  }
+
+  @Post('mobile/position')
+  @RequirePermissions(SITOP_PERMISSIONS.SHIFTS_VIEW)
+  updateMobilePosition(
+    @GetUser() actor: AuthenticatedOfficer,
+    @Body() body: { latitude: number; longitude: number },
+  ): Promise<unknown> {
+    return this.operations.updateMobilePosition(actor, body);
+  }
+
+  @Get('mobile/live-patrols')
+  @RequirePermissions(SITOP_PERMISSIONS.SHIFTS_VIEW)
+  listMobileLivePatrols(@GetUser() actor: AuthenticatedOfficer): Promise<unknown[]> {
+    return this.operations.listMobileLivePatrolUnits(actor);
+  }
+
   @Get('weapons')
   @RequirePermissions(SITOP_PERMISSIONS.ARMORY_VIEW)
   listWeapons(

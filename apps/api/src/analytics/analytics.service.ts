@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import {
   AssetStatus,
   AssetType,
@@ -51,9 +55,25 @@ export interface AnalyticsOverview {
 
 @Injectable()
 export class AnalyticsService {
+  private readonly logger = new Logger(AnalyticsService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async getOverview(
+    actor: AuthenticatedOfficer,
+    requestedDepartmentId?: string,
+  ): Promise<AnalyticsOverview> {
+    try {
+      return await this.buildOverview(actor, requestedDepartmentId);
+    } catch (error) {
+      this.logger.error('Fallo al generar panel ejecutivo', error);
+      throw new InternalServerErrorException(
+        'No se pudieron cargar los indicadores operativos',
+      );
+    }
+  }
+
+  private async buildOverview(
     actor: AuthenticatedOfficer,
     requestedDepartmentId?: string,
   ): Promise<AnalyticsOverview> {
@@ -61,6 +81,7 @@ export class AnalyticsService {
     const scopeLabel = await this.resolveScopeLabel(actor, scopeDepartmentId);
     const now = new Date();
     const startOfToday = startOfLocalDay(now);
+    const shiftDate = toDateOnly(now);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const seriesSince = new Date(startOfToday);
     seriesSince.setDate(seriesSince.getDate() - 29);
@@ -150,7 +171,7 @@ export class AnalyticsService {
       this.prisma.officerShift.count({
         where: {
           ...shiftDept,
-          fecha: startOfToday,
+          fecha: shiftDate,
           status: ShiftStatus.ON_DUTY_ACTIVE,
         },
       }),
@@ -320,6 +341,10 @@ export class AnalyticsService {
 
 function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function toDateOnly(date: Date): Date {
+  return new Date(date.toISOString().slice(0, 10));
 }
 
 function dateKey(date: Date): string {
