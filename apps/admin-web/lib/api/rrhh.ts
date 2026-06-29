@@ -1,4 +1,4 @@
-import { getAccessToken } from '@/lib/auth';
+import { authHeaders, parseApiError, apiFetch } from '@/lib/api/http';
 import { API_BASE_URL } from '@/lib/constants';
 import type { SitopPermission } from '@/lib/permissions';
 import type {
@@ -7,22 +7,6 @@ import type {
   OfficerRecord,
   RrhhCatalogs,
 } from '@/lib/types/rrhh.types';
-
-function authHeaders(): HeadersInit {
-  const token = getAccessToken();
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
-
-async function parseError(response: Response): Promise<string> {
-  const body = await response.json().catch(() => ({}));
-  const message = body.message;
-  if (Array.isArray(message)) return message.join('. ');
-  if (typeof message === 'string') return message;
-  return 'Operación rechazada';
-}
 
 export async function createDepartment(payload: {
   code: string;
@@ -34,7 +18,7 @@ export async function createDepartment(payload: {
     headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error(await parseError(response));
+  if (!response.ok) throw new Error(await parseApiError(response));
   return response.json();
 }
 
@@ -48,39 +32,34 @@ export async function createSquad(payload: {
     headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error(await parseError(response));
+  if (!response.ok) throw new Error(await parseApiError(response));
   return response.json();
 }
 
 export async function fetchRrhhCatalogs(): Promise<RrhhCatalogs> {
-  const response = await fetch(`${API_BASE_URL}/rrhh/catalogs`, {
+  const response = await apiFetch(`${API_BASE_URL}/rrhh/catalogs`, {
     headers: authHeaders(),
-    cache: 'no-store',
   });
-  if (!response.ok) throw new Error(await parseError(response));
+  if (!response.ok) throw new Error(await parseApiError(response));
   return response.json() as Promise<RrhhCatalogs>;
 }
 
 export async function searchOfficers(query?: string): Promise<OfficerRecord[]> {
   const params = query?.trim() ? `?q=${encodeURIComponent(query.trim())}` : '';
-  const response = await fetch(`${API_BASE_URL}/rrhh/officers${params}`, {
+  const response = await apiFetch(`${API_BASE_URL}/rrhh/officers${params}`, {
     headers: authHeaders(),
-    cache: 'no-store',
   });
-  if (!response.ok) throw new Error(await parseError(response));
+  if (!response.ok) throw new Error(await parseApiError(response));
   return response.json() as Promise<OfficerRecord[]>;
 }
 
 export async function createOfficerProfileForm(formData: FormData): Promise<OfficerRecord> {
-  const token = getAccessToken();
-  const response = await fetch(`${API_BASE_URL}/rrhh/officers/profile`, {
+  const response = await apiFetch(`${API_BASE_URL}/rrhh/officers/profile`, {
     method: 'POST',
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: authHeaders(''),
     body: formData,
   });
-  if (!response.ok) throw new Error(await parseError(response));
+  if (!response.ok) throw new Error(await parseApiError(response));
   return response.json() as Promise<OfficerRecord>;
 }
 
@@ -97,7 +76,7 @@ export async function assignOfficerToCommand(
     headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error(await parseError(response));
+  if (!response.ok) throw new Error(await parseApiError(response));
   return response.json() as Promise<OfficerRecord>;
 }
 
@@ -110,7 +89,7 @@ export async function activateOfficerAccount(
     headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error(await parseError(response));
+  if (!response.ok) throw new Error(await parseApiError(response));
   return response.json() as Promise<OfficerRecord>;
 }
 
@@ -122,7 +101,7 @@ export async function createOfficer(
     headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error(await parseError(response));
+  if (!response.ok) throw new Error(await parseApiError(response));
   return response.json() as Promise<OfficerRecord>;
 }
 
@@ -135,7 +114,7 @@ export async function updateOfficer(
     headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error(await parseError(response));
+  if (!response.ok) throw new Error(await parseApiError(response));
   return response.json() as Promise<OfficerRecord>;
 }
 
@@ -148,7 +127,7 @@ export async function setOfficerCredentials(
     headers: authHeaders(),
     body: JSON.stringify({ password }),
   });
-  if (!response.ok) throw new Error(await parseError(response));
+  if (!response.ok) throw new Error(await parseApiError(response));
   return response.json() as Promise<OfficerRecord>;
 }
 
@@ -161,7 +140,7 @@ export async function updateOfficerPermissions(
     headers: authHeaders(),
     body: JSON.stringify({ permissions }),
   });
-  if (!response.ok) throw new Error(await parseError(response));
+  if (!response.ok) throw new Error(await parseApiError(response));
   return response.json() as Promise<OfficerRecord>;
 }
 
@@ -174,7 +153,7 @@ export async function transferOfficer(
     headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error(await parseError(response));
+  if (!response.ok) throw new Error(await parseApiError(response));
   return response.json() as Promise<OfficerRecord>;
 }
 
@@ -187,7 +166,7 @@ export async function setSquadLeader(
     headers: authHeaders(),
     body: JSON.stringify({ leaderId }),
   });
-  if (!response.ok) throw new Error(await parseError(response));
+  if (!response.ok) throw new Error(await parseApiError(response));
   return response.json();
 }
 
@@ -196,6 +175,6 @@ export async function listPendingGraduates(): Promise<OfficerRecord[]> {
     headers: authHeaders(),
     cache: 'no-store',
   });
-  if (!response.ok) throw new Error(await parseError(response));
+  if (!response.ok) throw new Error(await parseApiError(response));
   return response.json() as Promise<OfficerRecord[]>;
 }

@@ -44,16 +44,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Sesión inválida o funcionario suspendido');
     }
 
-    if (
-      officer.rangeRole !== payload.rangeRole ||
-      officer.departmentId !== payload.departmentId ||
-      (officer.squadId ?? null) !== (payload.squadId ?? null)
-    ) {
-      throw new UnauthorizedException(
-        'El token no coincide con el estado actual del funcionario',
-      );
-    }
-
     return {
       id: officer.id,
       rangeRole: officer.rangeRole,
