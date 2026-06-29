@@ -274,6 +274,12 @@ export class RrhhService {
       assertDepartmentAccess(actor, dto.departmentId);
     }
 
+    if (existing.rangeRole === RangeRole.SUPER_ADMIN) {
+      throw new BadRequestException(
+        'El Director General no puede reasignarse por este flujo. Use transferencia de comando si aplica.',
+      );
+    }
+
     if (dto.squadId) {
       const squad = await this.prisma.squad.findUnique({
         where: { id: dto.squadId },
@@ -283,6 +289,8 @@ export class RrhhService {
         throw new BadRequestException('La escuadra no pertenece al comando seleccionado');
       }
     }
+
+    const isPendingProfile = existing.divisionRole === DivisionRole.SIN_ASIGNAR;
 
     const rangeRole =
       dto.divisionRole === DivisionRole.DIRECTOR
@@ -304,8 +312,9 @@ export class RrhhService {
           squadId: dto.squadId ?? null,
           divisionRole: dto.divisionRole,
           rangeRole,
-          permissions: [],
-          passwordHash: null,
+          ...(isPendingProfile
+            ? { permissions: [], passwordHash: null }
+            : {}),
         },
         select: OFFICER_LIST_SELECT,
       });

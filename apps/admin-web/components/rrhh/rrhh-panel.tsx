@@ -96,7 +96,8 @@ export function RrhhPanel() {
     return operationalDepartments.find((d) => d.id === assignDeptId)?.squads ?? [];
   }, [operationalDepartments, assignDeptId]);
 
-  const needsAssignment = selected?.divisionRole === 'SIN_ASIGNAR';
+  const needsAssignment =
+    selected?.divisionRole === 'SIN_ASIGNAR' && selected?.rangeRole !== 'SUPER_ADMIN';
   const needsActivation = Boolean(selected && !needsAssignment && !selected.hasCredentials);
 
   async function handleCreateDepartment(e: React.FormEvent) {

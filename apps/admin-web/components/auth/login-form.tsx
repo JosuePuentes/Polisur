@@ -29,9 +29,7 @@ export function LoginForm() {
         err instanceof Error && err.message !== 'LOGIN_FAILED'
           ? err.message
           : SECURITY_ALERT;
-      setError(
-        `${message}. Verifique cédula y contraseña. Si su cuenta es nueva, debe ser activada en RRHH.`,
-      );
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }

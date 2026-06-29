@@ -33,6 +33,13 @@ export class AuthController {
 
     this.loginThrottle.assertNotLocked(throttleKey);
 
+    const loginState = await this.authService.findOfficerLoginState(loginDto.cedula);
+    if (loginState.exists && !loginState.hasPassword) {
+      throw new UnauthorizedException(
+        'Cuenta pendiente de activación. Un administrador debe asignar comando y activar el usuario en RRHH.',
+      );
+    }
+
     const officer = await this.authService.validateOfficer(
       loginDto.cedula,
       loginDto.password,

@@ -7,10 +7,12 @@ import {
   DEFAULT_MINUTE_RESEÑA_PREFIX,
   DEFAULT_PEACE_QUADRANTS,
   MinuteCatalogKind,
+  DivisionRole,
   PrismaService,
   RangeRole,
 } from '@polisur/database';
 import * as bcrypt from 'bcrypt';
+import { buildCedulaLookupVariants } from '../common/utils/cedula-lookup.util';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -41,7 +43,9 @@ export class BootstrapAdminService {
     }
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    const existing = await this.prisma.officer.findUnique({ where: { cedula } });
+    const existing = await this.prisma.officer.findFirst({
+      where: { cedula: { in: buildCedulaLookupVariants(cedula) } },
+    });
 
     if (existing) {
       const forceReset = process.env.BOOTSTRAP_FORCE_PASSWORD_RESET === 'true';
@@ -52,13 +56,14 @@ export class BootstrapAdminService {
         data: {
           ...(shouldSetPassword ? { passwordHash } : {}),
           rangeRole: RangeRole.SUPER_ADMIN,
+          divisionRole: DivisionRole.DIRECTOR,
           isSuspended: false,
         },
       });
       this.logger.log(
         shouldSetPassword
-          ? `Bootstrap: credenciales y rol SUPER_ADMIN actualizados para cédula ${cedula}`
-          : `Bootstrap: rol SUPER_ADMIN sincronizado para cédula ${cedula} (contraseña conservada)`,
+          ? `Bootstrap: credenciales y rol SUPER_ADMIN actualizados para cédula ${existing.cedula}`
+          : `Bootstrap: rol SUPER_ADMIN sincronizado para cédula ${existing.cedula} (contraseña conservada)`,
       );
       return;
     }
@@ -91,6 +96,7 @@ export class BootstrapAdminService {
         nombres,
         apellidos,
         rangeRole: RangeRole.SUPER_ADMIN,
+        divisionRole: DivisionRole.DIRECTOR,
         passwordHash,
         credentialNumber,
         departmentId: department.id,

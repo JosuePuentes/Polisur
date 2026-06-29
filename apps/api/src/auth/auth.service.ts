@@ -2,9 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService, resolveOfficerPermissions } from '@polisur/database';
 import * as bcrypt from 'bcrypt';
-import { TIMING_SAFE_DUMMY_HASH } from './constants/auth.constants';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { SafeOfficer } from './types/safe-officer.type';
+import { buildCedulaLookupVariants } from '../common/utils/cedula-lookup.util';
 
 export interface LoginResponse {
   accessToken: string;
@@ -56,10 +56,16 @@ export class AuthService {
   ): Promise<SafeOfficer | null> {
     const officer = await this.findOfficerByCedula(cedula);
 
-    const hashToCompare = officer?.passwordHash ?? TIMING_SAFE_DUMMY_HASH;
-    const passwordMatches = await bcrypt.compare(passwordPlain, hashToCompare);
+    if (!officer || officer.isSuspended) {
+      return null;
+    }
 
-    if (!officer || officer.isSuspended || !officer.passwordHash || !passwordMatches) {
+    if (!officer.passwordHash) {
+      return null;
+    }
+
+    const passwordMatches = await bcrypt.compare(passwordPlain, officer.passwordHash);
+    if (!passwordMatches) {
       return null;
     }
 
@@ -67,22 +73,25 @@ export class AuthService {
     return safeOfficer;
   }
 
+  async findOfficerLoginState(
+    cedula: string,
+  ): Promise<{ exists: boolean; hasPassword: boolean; isSuspended: boolean }> {
+    const officer = await this.findOfficerByCedula(cedula);
+    if (!officer) {
+      return { exists: false, hasPassword: false, isSuspended: false };
+    }
+    return {
+      exists: true,
+      hasPassword: Boolean(officer.passwordHash),
+      isSuspended: officer.isSuspended,
+    };
+  }
+
   private async findOfficerByCedula(
     cedula: string,
   ): Promise<(SafeOfficer & { passwordHash: string | null }) | null> {
-    const trimmed = cedula.trim();
-    const digits = trimmed.replace(/\D/g, '');
-
-    const variants = new Set<string>([trimmed]);
-    if (digits) {
-      variants.add(digits);
-      variants.add(`V-${digits}`);
-      variants.add(`V${digits}`);
-      variants.add(`E-${digits}`);
-    }
-
     return this.prisma.officer.findFirst({
-      where: { cedula: { in: [...variants] } },
+      where: { cedula: { in: buildCedulaLookupVariants(cedula) } },
       select: OFFICER_PUBLIC_SELECT,
     });
   }
