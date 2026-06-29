@@ -19,6 +19,18 @@ export async function loginRequest(
   });
 
   if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const message = body.message;
+    if (response.status === 429) {
+      throw new Error(
+        typeof message === 'string'
+          ? message
+          : 'Demasiados intentos. Espere unos minutos e intente de nuevo.',
+      );
+    }
+    if (typeof message === 'string') {
+      throw new Error(message);
+    }
     throw new Error('LOGIN_FAILED');
   }
 

@@ -54,12 +54,7 @@ export class AuthService {
     cedula: string,
     passwordPlain: string,
   ): Promise<SafeOfficer | null> {
-    const normalizedCedula = cedula.trim();
-
-    const officer = await this.prisma.officer.findUnique({
-      where: { cedula: normalizedCedula },
-      select: OFFICER_PUBLIC_SELECT,
-    });
+    const officer = await this.findOfficerByCedula(cedula);
 
     const hashToCompare = officer?.passwordHash ?? TIMING_SAFE_DUMMY_HASH;
     const passwordMatches = await bcrypt.compare(passwordPlain, hashToCompare);
@@ -70,6 +65,26 @@ export class AuthService {
 
     const { passwordHash: _passwordHash, ...safeOfficer } = officer;
     return safeOfficer;
+  }
+
+  private async findOfficerByCedula(
+    cedula: string,
+  ): Promise<(SafeOfficer & { passwordHash: string | null }) | null> {
+    const trimmed = cedula.trim();
+    const digits = trimmed.replace(/\D/g, '');
+
+    const variants = new Set<string>([trimmed]);
+    if (digits) {
+      variants.add(digits);
+      variants.add(`V-${digits}`);
+      variants.add(`V${digits}`);
+      variants.add(`E-${digits}`);
+    }
+
+    return this.prisma.officer.findFirst({
+      where: { cedula: { in: [...variants] } },
+      select: OFFICER_PUBLIC_SELECT,
+    });
   }
 
   login(officer: SafeOfficer): LoginResponse {

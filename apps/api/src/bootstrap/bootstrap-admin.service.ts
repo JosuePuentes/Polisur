@@ -44,15 +44,22 @@ export class BootstrapAdminService {
     const existing = await this.prisma.officer.findUnique({ where: { cedula } });
 
     if (existing) {
+      const forceReset = process.env.BOOTSTRAP_FORCE_PASSWORD_RESET === 'true';
+      const shouldSetPassword = !existing.passwordHash || forceReset;
+
       await this.prisma.officer.update({
         where: { id: existing.id },
         data: {
-          passwordHash,
+          ...(shouldSetPassword ? { passwordHash } : {}),
           rangeRole: RangeRole.SUPER_ADMIN,
           isSuspended: false,
         },
       });
-      this.logger.log(`Bootstrap: credenciales y rol SUPER_ADMIN actualizados para cédula ${cedula}`);
+      this.logger.log(
+        shouldSetPassword
+          ? `Bootstrap: credenciales y rol SUPER_ADMIN actualizados para cédula ${cedula}`
+          : `Bootstrap: rol SUPER_ADMIN sincronizado para cédula ${cedula} (contraseña conservada)`,
+      );
       return;
     }
 
