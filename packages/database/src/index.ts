@@ -26,6 +26,13 @@ export {
   DEFAULT_MINUTE_ASUNTOS,
   MAX_MINUTE_PHOTOS,
 } from './constants/minute-defaults';
+export {
+  DEMO_CODE_PREFIX,
+  DEMO_CEDULA_PREFIX,
+  DEMO_DEFAULT_PASSWORD,
+  DEMO_DETAINEES,
+  DEMO_OFFICERS,
+} from './constants/demo-data.constants';
 
 export {
   AssetStatus,

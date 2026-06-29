@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { fetchAnalyticsOverview, type AnalyticsOverview } from '@/lib/api/analytics';
+import { getSession } from '@/lib/auth';
 import { useTacticalSocket } from '@/lib/hooks/use-tactical-socket';
+import { DemoDataPanel } from '@/components/dashboard/demo-data-panel';
 
 const REFRESH_MS = 30_000;
 
@@ -99,6 +101,8 @@ function ComparisonChart({
 }
 
 export function AnalyticsDashboard() {
+  const session = getSession();
+  const isSuperAdmin = session?.rangeRole === 'SUPER_ADMIN';
   const [data, setData] = useState<AnalyticsOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -250,6 +254,8 @@ export function AnalyticsDashboard() {
           value={data.minutasByMonth.at(-1)?.total ?? 0}
         />
       </div>
+
+      {isSuperAdmin && <DemoDataPanel />}
     </div>
   );
 }

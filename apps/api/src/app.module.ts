@@ -6,6 +6,7 @@ import { AcademyModule } from './academy/academy.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { BootstrapModule } from './bootstrap/bootstrap.module';
+import { DemoDataModule } from './demo-data/demo-data.module';
 import { HealthModule } from './health/health.module';
 import { IncidentsModule } from './incidents/incidents.module';
 import { ProceduresModule } from './procedures/procedures.module';
@@ -29,6 +30,7 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     AuditModule,
     AnalyticsModule,
     BootstrapModule,
+    DemoDataModule,
     HealthModule,
     TacticalModule,
     AuthModule,
